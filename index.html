@@ -82,7 +82,7 @@ function vL(){
  <div><label>Property type</label><input id="k" value="${esc(e.kind)}" placeholder="Flat, duplex, land, shop"></div>
  <div><label>City / area / state</label><input id="lo" list="ngStateOptions" value="${esc(e.loc)}" placeholder="Kaduna, Lagos, London, Dubai..."><datalist id="ngStateOptions">${NG_STATES.map(x=>`<option value="${x}">`).join('')}</datalist></div>
  <div><label>Country</label><input id="co" list="countryOptions" value="${esc(e.country||'Nigeria')}" placeholder="Country"><datalist id="countryOptions">${COUNTRIES.map(x=>`<option value="${x}">`).join('')}</datalist></div>
- <div><label>Currency</label><select id="cu">${CURR.map(c=>`<option value="${c}" ${(e.currency||S.set.currency||'NGN')==c?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div><label>Currency</label><select id="cu" onchange="$('priceCurrency').textContent=this.value">${CURR.map(c=>`<option value="${c}" ${(e.currency||S.set.currency||'NGN')==c?'selected':''}>${c}</option>`).join('')}</select></div>
  <div><label>Price (<span id="priceCurrency">${esc(e.currency||S.set.currency||'NGN')}</span>)</label><input id="pr" type="number" value="${e.price||''}"></div>
  <div><label>Rent period</label><select id="pe"><option ${e.per=='year'?'selected':''}>year</option><option ${e.per=='month'?'selected':''}>month</option></select></div>
  <div><label>Bedrooms</label><input id="bd" type="number" value="${e.beds||''}"></div>
@@ -186,7 +186,7 @@ function areasIn(t){
  S.listings.forEach(l=>String(l.loc||'').toLowerCase().split(/[,/]/).forEach(x=>{x=x.trim();if(x.length>2)set.add(x)}));
  const f=[...set].filter(a=>hasW(t,a)),sp=f.filter(a=>!CITIES.includes(a));
  const known=(sp.length?sp:f).map(a=>a.replace(/\b\w/g,c=>c.toUpperCase())).join(', ');if(known)return known;const m=String(t||'').match(/(?:in|around|near|at|located in|based in)\s+([a-z][a-z .'-]{2,40})(?=,|\.|\n|\b(?:for sale|for rent|to rent|to buy|asking|price|budget|with|and|near)\b|$)/i);return m?m[1].trim().replace(/\b\w/g,c=>c.toUpperCase()):''}
-function countryIn(t){const z=String(t||'').toLowerCase();if(/\b(uk|u\.k\.|britain)\b/.test(z))return 'United Kingdom';if(/\b(us|u\.s\.|usa)\b/.test(z))return 'United States';if(/\buae\b/.test(z))return 'United Arab Emirates';if(/\bdrc\b/.test(z))return 'Democratic Republic of the Congo';return COUNTRIES.find(c=>z.includes(c.toLowerCase()))||(S.set&&S.set.country)||'Nigeria'}
+function countryIn(t){const z=String(t||'').toLowerCase();if(/\b(uk|u\.k\.|britain)\b/.test(z))return 'United Kingdom';if(/\b(us|u\.s\.|usa)\b/.test(z))return 'United States';if(/\buae\b/.test(z))return 'United Arab Emirates';if(/\bdrc\b/.test(z))return 'Democratic Republic of the Congo';return COUNTRIES.slice().sort((a,b)=>b.length-a.length).find(c=>z.includes(c.toLowerCase()))||(S.set&&S.set.country)||'Nigeria'}
 function currencyIn(t){const x=String(t||'').toUpperCase();return /\$|\bUSD\b/.test(x)?'USD':/£|\bGBP\b/.test(x)?'GBP':/€|\bEUR\b/.test(x)?'EUR':/\bZAR\b/.test(x)?'ZAR':/\bGHS\b/.test(x)?'GHS':/\bKES\b/.test(x)?'KES':/\bAED\b/.test(x)?'AED':/\bINR\b|₹/.test(x)?'INR':/\bCNY\b|¥/.test(x)?'CNY':/\bJPY\b/.test(x)?'JPY':/\bCAD\b/.test(x)?'CAD':/\bAUD\b/.test(x)?'AUD':/₦|\bNGN\b|\bN\s?\d/.test(x)?'NGN':(S.set&&S.set.currency)||'NGN'}
 function pReq(b){
  const t=b.replace(/https?:\/\/\S+/g,' ').toLowerCase(),ph=((b.match(PH)||[''])[0]).replace(/[\s-]/g,''),bud=amtOf(b);
