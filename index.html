@@ -217,31 +217,66 @@ const allM=()=>{const o=[];S.reqs.forEach(r=>S.listings.forEach(l=>{const x=sc(l
 const matchesFor=l=>S.reqs.filter(r=>{const x=sc(l,r);return x&&x.s>=60});
 function vM(){
  const ms=allM();
- $('v').innerHTML=`<div id="inb">${inbHTML()}</div><div class="r" style="margin:0 0 10px"><button class="p" onclick="mMode='req';mDraft=null;render()">Import requests</button><button onclick="mMode='lst';mDraft=null;render()">Import listings</button><select style="width:auto" onchange="mMin=+this.value;render()">${[40,60,80].map(v=>`<option value="${v}" ${v==mMin?'selected':''}>Show ${v}%+</option>`).join('')}</select></div>`+
+ $('v').innerHTML=`<div id="inb">${inbHTML()}</div><div class="r" style="margin:0 0 10px"><button class="p" onclick="mMode='mixed';mDraft=null;render()">Import mixed messages</button><button onclick="mMode='req';mDraft=null;render()">Requests only</button><button onclick="mMode='lst';mDraft=null;render()">Listings only</button><select style="width:auto" onchange="mMin=+this.value;render()">${[40,60,80].map(v=>`<option value="${v}" ${v==mMin?'selected':''}>Show ${v}%+</option>`).join('')}</select></div>`+
  (mMode?impUI():'')+
  `<div class="st"><div><b>${S.reqs.length}</b><span>Requests</span></div><div><b>${S.listings.filter(l=>l.status=='Available').length}</b><span>Available listings</span></div><div><b>${ms.length}</b><span>Matches</span></div><div><b>${ms.filter(m=>m.s>=80).length}</b><span>Strong (80%+)</span></div></div>`+
  (ms.length?ms.map(mCard).join(''):'<p class="mu">No matches yet. Import client requests and make sure your listings are Available. Scores compare area, property type, bedrooms and budget, using only what the request states.</p>')+
  (S.reqs.length?'<h2>Requests</h2>'+S.reqs.map(mReq).join(''):'')}
-function impUI(){const q=mMode=='req';
- return `<div class="c"><h2 style="margin-top:0">${q?'Import requests':'Import listings'}</h2><p class="mu">Paste one or many ${q?'client messages (WhatsApp, Facebook, SMS)':'property descriptions'}, separated by a blank line, or upload a .txt or .csv file. Check the extracted details before saving.</p><textarea id="mt" rows="6"></textarea><div class="r">${q?`<select id="ms" style="width:auto">${SRC.map(s=>`<option>${s}</option>`).join('')}</select>`:''}<input type="file" accept=".txt,.csv,text/plain" style="width:auto" onchange="mFile(this)"><button class="p" onclick="mParse()">Extract details</button><button onclick="mMode='';mDraft=null;render()">Close</button></div>${mDraft?draftUI():''}</div>`}
+function impUI(){const q=mMode=='req',mixed=mMode=='mixed';
+ return '<div class="c"><h2 style="margin-top:0">'+(mixed?'Import mixed property messages':q?'Import requests':'Import listings')+'</h2><p class="mu">'+(mixed?'Paste a mixture of property advertisements and client requirements. Property Desk will sort each message into Listings, Requests or Needs Review.':'Paste one or many '+(q?'client messages (WhatsApp, Facebook, SMS)':'property descriptions'))+'. Separate individual entries with a blank line, or upload a .txt or .csv file. Review the extracted details before saving.</p><textarea id="mt" rows="8" placeholder="Paste several messages here, with a blank line between each one..."></textarea><div class="r">'+(q||mixed?'<select id="ms" style="width:auto">'+SRC.map(s=>'<option>'+s+'</option>').join('')+'</select>':'')+'<input type="file" accept=".txt,.csv,text/plain" style="width:auto" onchange="mFile(this)"><button class="p" onclick="mParse()">Analyse and sort</button><button onclick="mMode=\'\';mDraft=null;render()">Close</button></div>'+(mDraft?draftUI():'')+'</div>'}
 function mFile(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('mt').value=/\.csv$/i.test(f.name)?r.result.split(/\r?\n/).join('\n\n'):r.result};r.readAsText(f)}
+function classifyMixed(b){
+ const t=String(b||'').toLowerCase();
+ const rq=[/looking for|in search of|searching for|seeking|need(?:s)? (?:a |an |one |to rent|to buy)?|client (?:is )?looking|buyer wants|tenant wants|wanted to rent|wanted to buy|requirements?|budget of|my budget|please get me|help me find|urgently (?:need|want)/,/ to rent| for rent| to buy| to purchase/];
+ const ls=[/available (?:now|for|at)|for sale|asking price|price is|selling at|property for sale|direct (?:owner|mandate)|inspection (?:is )?available|owner wants|property available|to let/,/bedroom|bedrooms|duplex|bungalow|flat|apartment|plot of land|sqm/];
+ const score=a=>a.reduce((n,re)=>n+(re.test(t)?(re===a[0]?3:1):0),0);
+ const r=score(rq),l=score(ls);
+ if(r===0&&l===0)return 'review';
+ if(r>=3&&r>l)return 'request';
+ if(l>=3&&l>r)return 'listing';
+ if(r>l+1)return 'request';
+ if(l>r+1)return 'listing';
+ return 'review';
+}
 function mParse(){
  const bl=$('mt').value.split(/\n\s*\n|\n-{3,}\n/).map(s=>s.trim()).filter(s=>s.length>12);
- if(!bl.length){alert('Paste some text or upload a file first.');return}
+ if(!bl.length){alert('Paste messages first. Separate each entry with a blank line.');return}
  const src=$('ms')?$('ms').value:'';
- mDraft=bl.map(b=>Object.assign(mMode=='req'?pReq(b):pLst(b),{raw:b,ok:true,src:/facebook\.com|fb\.com|fb\.watch/i.test(b)?'Facebook':src}));render()}
-function draftUI(){const q=mMode=='req';
- return mDraft.map((d,i)=>`<div class="c" style="margin:10px 0 0"><label style="display:flex;gap:8px;color:var(--tx)"><input type="checkbox" style="width:auto" ${d.ok?'checked':''} onchange="mDraft[${i}].ok=this.checked"> <span class="mu">${esc(d.raw.slice(0,140))}${d.raw.length>140?'…':''}</span></label><div class="g" style="margin-top:8px">`+
- (q?`<div><label>Name</label><input value="${esc(d.name)}" oninput="mDraft[${i}].name=this.value"></div><div><label>Phone</label><input value="${esc(d.phone)}" oninput="mDraft[${i}].phone=this.value"></div><div><label>Facebook link</label><input value="${esc(d.url)}" oninput="mDraft[${i}].url=this.value"></div>`:`<div><label>Title</label><input value="${esc(d.title)}" oninput="mDraft[${i}].title=this.value"></div>`)+
- `<div><label>For</label><select onchange="mDraft[${i}].tx=this.value"><option ${d.tx=='Sale'?'selected':''}>Sale</option><option ${d.tx=='Rent'?'selected':''}>Rent</option></select></div><div><label>Area / city</label><input value="${esc(d.loc)}" oninput="mDraft[${i}].loc=this.value"></div><div><label>Country</label><input list="draftCountries${i}" value="${esc(d.country||S.set.country||'Nigeria')}" oninput="mDraft[${i}].country=this.value"><datalist id="draftCountries${i}">${COUNTRIES.map(c=>`<option value="${c}">`).join('')}</datalist></div><div><label>Currency</label><select onchange="mDraft[${i}].currency=this.value">${CURR.map(c=>`<option value="${c}" ${(d.currency||S.set.currency||'NGN')==c?'selected':''}>${c}</option>`).join('')}</select></div><div><label>Type</label><input value="${esc(d.kind)}" oninput="mDraft[${i}].kind=this.value"></div><div><label>Beds</label><input type="number" value="${d.beds||''}" oninput="mDraft[${i}].beds=+this.value"></div><div><label>${q?'Budget ('+(d.currency||S.set.currency||'NGN')+', yearly for rent)':'Price ('+(d.currency||S.set.currency||'NGN')+')'}</label><input type="number" value="${(q?d.budget:d.price)||''}" oninput="mDraft[${i}].${q?'budget':'price'}=+this.value"></div>${q?'':`<div><label>Rent period</label><select onchange="mDraft[${i}].per=this.value"><option ${d.per=='year'?'selected':''}>year</option><option ${d.per=='month'?'selected':''}>month</option></select></div>`}</div></div>`).join('')+
- `<div class="r"><button class="p" onclick="mSave()">Save selected</button></div>`}
+ mDraft=bl.map(b=>{
+  const classification=mMode=='mixed'?classifyMixed(b):(mMode=='req'?'request':'listing');
+  const d=classification=='listing'?pLst(b):pReq(b);
+  return Object.assign(d,{classification,raw:b,ok:true,src:/facebook\.com|fb\.com|fb\.watch/i.test(b)?'Facebook':src});
+ });
+ render();
+}
+function draftUI(){
+ return mDraft.map((d,i)=>{
+  const q=mMode=='req'||(mMode=='mixed'&&d.classification!=='listing');
+  let h='<div class="c" style="margin:10px 0 0"><label style="display:flex;gap:8px;color:var(--tx)"><input type="checkbox" style="width:auto" '+(d.ok?'checked':'')+' onchange="mDraft['+i+'].ok=this.checked"> <span class="mu">'+esc(d.raw.slice(0,180))+(d.raw.length>180?'…':'')+'</span></label>';
+  if(mMode=='mixed')h+='<div style="margin-top:8px"><label>Detected category — change if incorrect</label><select onchange="mDraft['+i+'].classification=this.value;render()"><option value="listing" '+(d.classification=='listing'?'selected':'')+'>PROPERTY LISTING</option><option value="request" '+(d.classification=='request'?'selected':'')+'>PROPERTY REQUEST</option><option value="review" '+(d.classification=='review'?'selected':'')+'>NEEDS REVIEW</option></select></div>';
+  h+='<div class="g" style="margin-top:8px">';
+  if(q)h+='<div><label>Name</label><input value="'+esc(d.name)+'" oninput="mDraft['+i+'].name=this.value"></div><div><label>Phone</label><input value="'+esc(d.phone)+'" oninput="mDraft['+i+'].phone=this.value"></div><div><label>Facebook link</label><input value="'+esc(d.url)+'" oninput="mDraft['+i+'].url=this.value"></div>';
+  else h+='<div><label>Title</label><input value="'+esc(d.title)+'" oninput="mDraft['+i+'].title=this.value"></div>';
+  h+='<div><label>For</label><select onchange="mDraft['+i+'].tx=this.value"><option '+(d.tx=='Sale'?'selected':'')+'>Sale</option><option '+(d.tx=='Rent'?'selected':'')+'>Rent</option></select></div><div><label>Area / city</label><input value="'+esc(d.loc)+'" oninput="mDraft['+i+'].loc=this.value"></div><div><label>Country</label><input value="'+esc(d.country||'Nigeria')+'" oninput="mDraft['+i+'].country=this.value"></div><div><label>Currency</label><select onchange="mDraft['+i+'].currency=this.value">'+CURR.map(c=>'<option value="'+c+'" '+((d.currency||'NGN')==c?'selected':'')+'>'+c+'</option>').join('')+'</select></div><div><label>Type</label><input value="'+esc(d.kind)+'" oninput="mDraft['+i+'].kind=this.value"></div><div><label>Beds</label><input type="number" value="'+(d.beds||'')+'" oninput="mDraft['+i+'].beds=+this.value"></div><div><label>'+(q?'Budget':'Price')+' ('+(d.currency||'NGN')+')</label><input type="number" value="'+((q?d.budget:d.price)||'')+'" oninput="mDraft['+i+'].'+(q?'budget':'price')+'=+this.value"></div>';
+  if(!q)h+='<div><label>Rent period</label><select onchange="mDraft['+i+'].per=this.value"><option '+(d.per=='year'?'selected':'')+'>year</option><option '+(d.per=='month'?'selected':'')+'>month</option></select></div>';
+  return h+'</div></div>';
+ }).join('')+'<div class="r"><button class="p" onclick="mSave()">Save selected</button>'+(mMode=='mixed'?'<span class="mu">'+mDraft.filter(d=>d.classification=='review').length+' item(s) need review</span>':'')+'</div>';
+}
 function mSave(){
- let sk=0;
+ let sk=0,review=0,reqs=0,lsts=0;
  mDraft.filter(d=>d.ok).forEach(d=>{
-  if(mMode=='req')S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,country:d.country||S.set.country||'Nigeria',currency:d.currency||S.set.currency||'NGN',kind:d.kind,beds:d.beds,budget:d.budget,url:d.url||'',src:d.src,raw:d.raw,at:Date.now()});
-  else if(!d.price)sk++;
-  else S.listings.unshift({id:uid(),photo:'',title:d.title,type:d.tx,kind:d.kind,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',price:d.price,per:d.per||'year',beds:d.beds||'',baths:'',status:'Available',desc:d.raw})});
- markInb(mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId));mDraft=null;mMode='';save();render();if(sk)alert(sk+' listing(s) were skipped because no price was found. Import them again with a price.')}
+  const kind=mMode=='req'?'request':mMode=='lst'?'listing':d.classification;
+  if(kind=='review'){review++;return}
+  if(kind=='request'){
+   S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind,beds:d.beds,budget:d.budget,url:d.url||'',src:d.src,raw:d.raw,at:Date.now()});reqs++;
+  }else if(!d.price){sk++}
+  else{
+   S.listings.unshift({id:uid(),photo:'',title:d.title,type:d.tx,kind:d.kind,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',price:d.price,per:d.per||'year',beds:d.beds||'',baths:'',status:'Available',desc:d.raw});lsts++;
+  }
+ });
+ markInb(mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId));mDraft=null;mMode='';save();render();
+ const notes=[];if(reqs)notes.push(reqs+' request(s) saved');if(lsts)notes.push(lsts+' listing(s) saved');if(review)notes.push(review+' item(s) left in Needs Review');if(sk)notes.push(sk+' listing(s) skipped because no price was found');if(notes.length)alert(notes.join('. ')+'.');
+}
 function mCard(m){const l=m.l,r=m.r,saved=S.leads.some(x=>x.rid==r.id&&x.lid==l.id);
  return `<div class="c"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(r.name||'Prospect')} <span class="mu">${esc(r.phone||'')}</span></b><b style="color:var(--ac);font-size:20px">${m.s}%</b></div><div class="mu">Wants ${esc((r.beds?r.beds+'-bed ':'')+(r.kind||'property'))} to ${r.tx=='Rent'?'rent':'buy'} · ${esc(r.loc||'any area')}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget stated'} · ${esc(r.src||'')}</div><div class="mu">Available as at ${fmtDate(r.at)}</div><div style="margin:6px 0"><b>→ ${esc(l.title)}</b> <span class="mu">${price(l)} · ${esc(l.loc)}</span></div><div class="mu">${m.why.map(x=>esc(x)).join('<br>')}</div><div class="r"><button class="p" onclick="mMsg('${r.id}','${l.id}')">Message prospect</button><button onclick="mLead('${r.id}','${l.id}')" ${saved?'disabled':''}>${saved?'Lead saved':'Save as lead'}</button><button onclick="kitId='${l.id}';tab='listings';render()">Marketing kit</button>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="fbL='${l.id}';tab='fb';render()">Post to Facebook groups</button></div></div>`}
 function mMsg(rid,lid){
