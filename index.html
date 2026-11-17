@@ -249,11 +249,17 @@ function mParse(){
  });
  render();
 }
+function setDraftClass(i,value){
+ const d=mDraft[i],raw=d.raw,ok=d.ok,src=d.src;
+ const parsed=value=='listing'?pLst(raw):pReq(raw);
+ Object.assign(d,parsed,{classification:value,raw,ok,src});
+ render();
+}
 function draftUI(){
  return mDraft.map((d,i)=>{
   const q=mMode=='req'||(mMode=='mixed'&&d.classification!=='listing');
   let h='<div class="c" style="margin:10px 0 0"><label style="display:flex;gap:8px;color:var(--tx)"><input type="checkbox" style="width:auto" '+(d.ok?'checked':'')+' onchange="mDraft['+i+'].ok=this.checked"> <span class="mu">'+esc(d.raw.slice(0,180))+(d.raw.length>180?'…':'')+'</span></label>';
-  if(mMode=='mixed')h+='<div style="margin-top:8px"><label>Detected category — change if incorrect</label><select onchange="mDraft['+i+'].classification=this.value;render()"><option value="listing" '+(d.classification=='listing'?'selected':'')+'>PROPERTY LISTING</option><option value="request" '+(d.classification=='request'?'selected':'')+'>PROPERTY REQUEST</option><option value="review" '+(d.classification=='review'?'selected':'')+'>NEEDS REVIEW</option></select></div>';
+  if(mMode=='mixed')h+='<div style="margin-top:8px"><label>Detected category — change if incorrect</label><select onchange="setDraftClass('+i+',this.value)"><option value="listing" '+(d.classification=='listing'?'selected':'')+'>PROPERTY LISTING</option><option value="request" '+(d.classification=='request'?'selected':'')+'>PROPERTY REQUEST</option><option value="review" '+(d.classification=='review'?'selected':'')+'>NEEDS REVIEW</option></select></div>';
   h+='<div class="g" style="margin-top:8px">';
   if(q)h+='<div><label>Name</label><input value="'+esc(d.name)+'" oninput="mDraft['+i+'].name=this.value"></div><div><label>Phone</label><input value="'+esc(d.phone)+'" oninput="mDraft['+i+'].phone=this.value"></div><div><label>Facebook link</label><input value="'+esc(d.url)+'" oninput="mDraft['+i+'].url=this.value"></div>';
   else h+='<div><label>Title</label><input value="'+esc(d.title)+'" oninput="mDraft['+i+'].title=this.value"></div>';
