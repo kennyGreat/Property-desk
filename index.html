@@ -41,7 +41,30 @@ nav button{position:relative}
 <div id="v"></div>
 </div>
 <div id="pa"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js">
+/* ===== App startup ===== */
+(function startPropertyDesk(){
+  const boot = () => {
+    try {
+      if (!S.set) S.set = {biz:'Property Desk',phone:'',sale:5,rent:10};
+      if (!Array.isArray(S.listings)) S.listings=[];
+      if (!Array.isArray(S.leads)) S.leads=[];
+      if (!Array.isArray(S.reqs)) S.reqs=[];
+      if (!Array.isArray(S.groups)) S.groups=[];
+      if (!S.chk) S.chk={};
+      render();
+    } catch (err) {
+      console.error('Property Desk startup failed:', err);
+      const root=document.getElementById('v');
+      if(root) root.innerHTML='<div class="c"><h2>Property Desk could not start</h2><p class="mu">The app encountered a startup error. Reload the page. If it continues, clear this site\'s cached files and reload.</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></div>';
+      const pre=root&&root.querySelector('pre'); if(pre) pre.textContent=String(err&&err.stack||err);
+    }
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true});
+  else boot();
+})();
+
+</script>
 <script>
 const K='propdesk_v1';
 let S={listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,rent:10},chk:{},groups:[],reqs:[]};
