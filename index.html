@@ -48,7 +48,9 @@ let S={listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,re
 try{const x=localStorage.getItem(K);if(x)S=Object.assign(S,JSON.parse(x))}catch(e){}
 const cache=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};const save=()=>{cache();qsync()};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const N=n=>'₦'+Number(n||0).toLocaleString('en-NG');
+const CURR=['NGN','USD','GBP','EUR','CAD','AUD','ZAR','GHS','KES','UGX','TZS','AED','SAR','INR','CNY','JPY','CHF'];
+const N=(n,c=(S.set&&S.set.currency)||'NGN')=>{try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c,maximumFractionDigits:0}).format(Number(n||0))}catch(e){return c+' '+Number(n||0).toLocaleString()}};
+const fmtDate=v=>v?new Date(v).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}):'Date not recorded';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const wa=p=>{p=String(p||'').replace(/\D/g,'');if(p.startsWith('0'))p='234'+p.slice(1);return p};
 const STG=['New','Contacted','Viewing booked','Offer made','Closed – won','Lost'];
@@ -59,7 +61,7 @@ const tabs=[['listings','<b>🏠</b>Listings'],['match','<b>🔗</b>Match'],['le
 function nav(){document.getElementById('nav').innerHTML=tabs.map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';kitId=null;render()">${t[1]}${t[0]=='match'&&INB.length?'<span class="tag" style="position:absolute;margin:-3px 0 0 16px">'+INB.length+'</span>':''}</button>`).join('')}
 function render(){document.getElementById('ttl').textContent=S.set.biz||'Property Desk';nav();({listings:vL,leads:vLd,fb:vFb,match:vM,plan:vP,settings:vS})[tab]();}
 const $=id=>document.getElementById(id);
-const price=l=>N(l.price)+(l.type=='Rent'?' / '+(l.per||'year'):'');
+const price=l=>N(l.price,l.currency||S.set.currency)+(l.type=='Rent'?' / '+(l.per||'year'):'');
 function stats(){
  const av=S.listings.filter(l=>l.status=='Available').length;
  const open=S.leads.filter(x=>!['Closed – won','Lost'].includes(x.stage)).length;
@@ -70,13 +72,15 @@ function stats(){
 function vL(){
  if(kitId)return vKit();
  const e=edit?S.listings.find(l=>l.id==edit):{};
- $('v').innerHTML=stats()+`<div class="c"><h2 style="margin-top:0">${edit?'Edit listing':'Add listing'}</h2>
+ $('v').innerHTML=stats()+`<div class="c"><h2 style="margin-top:0">Describe a property in plain language</h2><p class="mu">Example: 3-bedroom detached duplex for sale in Lekki Phase 1, Lagos, Nigeria. Asking price USD 450,000. 4 bathrooms, swimming pool and title documents.</p><textarea id="listingPrompt" rows="3" placeholder="Paste or type the property description..."></textarea><div class="r"><button class="p" onclick="parseListingPrompt()">Extract details into listing</button></div></div><div class="c"><h2 style="margin-top:0">${edit?'Edit listing':'Add listing'}</h2>
  <div class="g">
  <div><label>Title</label><input id="t" value="${esc(e.title)}" placeholder="3-bedroom flat, Sabon Tasha"></div>
  <div><label>For</label><select id="ty"><option ${e.type=='Sale'?'selected':''}>Sale</option><option ${e.type=='Rent'?'selected':''}>Rent</option></select></div>
  <div><label>Property type</label><input id="k" value="${esc(e.kind)}" placeholder="Flat, duplex, land, shop"></div>
- <div><label>Location</label><input id="lo" value="${esc(e.loc)}" placeholder="Area, city"></div>
- <div><label>Price (₦)</label><input id="pr" type="number" value="${e.price||''}"></div>
+ <div><label>City / area / state</label><input id="lo" value="${esc(e.loc)}" placeholder="Kaduna, Lagos, London, Dubai..."></div>
+ <div><label>Country</label><input id="co" value="${esc(e.country||'Nigeria')}" placeholder="Country"></div>
+ <div><label>Currency</label><select id="cu">${CURR.map(c=>`<option value="${c}" ${(e.currency||S.set.currency||'NGN')==c?'selected':''}>${c}</option>`).join('')}</select></div>
+ <div><label>Price (<span id="priceCurrency">${esc(e.currency||S.set.currency||'NGN')}</span>)</label><input id="pr" type="number" value="${e.price||''}"></div>
  <div><label>Rent period</label><select id="pe"><option ${e.per=='year'?'selected':''}>year</option><option ${e.per=='month'?'selected':''}>month</option></select></div>
  <div><label>Bedrooms</label><input id="bd" type="number" value="${e.beds||''}"></div>
  <div><label>Bathrooms</label><input id="ba" type="number" value="${e.baths||''}"></div>
@@ -87,9 +91,10 @@ function vL(){
  (S.listings.length?S.listings.map(l=>`<div class="c"><div class="li">${l.photo?`<img src="${l.photo}" alt="">`:''}<div style="flex:1"><b>${esc(l.title)}</b><div><span class="tag">For ${l.type}</span><span class="tag">${esc(l.status)}</span></div><div>${price(l)}</div><div class="mu">${esc(l.loc)} ${l.beds?'· '+l.beds+' bed':''} ${l.baths?'· '+l.baths+' bath':''}</div><div class="mu">${S.leads.filter(x=>x.lid==l.id).length} leads · ${matchesFor(l).length} matching requests</div></div></div>
  <div class="r"><button class="p" onclick="kitId='${l.id}';render()">Marketing kit</button><button onclick="edit='${l.id}';photo='';render();scrollTo(0,0)">Edit</button><button class="d" onclick="delL('${l.id}')">Delete</button></div></div>`).join(''):'<p class="mu">No listings yet. Add your first one above.</p>');
 }
+function parseListingPrompt(){const raw=$('listingPrompt').value.trim();if(raw.length<12){alert('Enter a fuller property description first.');return}const d=pLst(raw);$('t').value=d.title;$('ty').value=d.tx;$('k').value=d.kind||'';$('lo').value=d.loc||'';$('co').value=d.country||'Nigeria';$('cu').value=d.currency||'NGN';$('pr').value=d.price||'';$('pe').value=d.per||'year';$('bd').value=d.beds||'';$('de').value=raw;if(!d.price)alert('Details extracted. Enter the price manually because it was not detected.');document.getElementById('de').focus()}
 function pick(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const m=900,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);photo=c.toDataURL('image/jpeg',.7)};im.src=r.result};r.readAsDataURL(f)}
 function saveL(){
- const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value,loc:$('lo').value,price:+$('pr').value,per:$('pe').value,beds:$('bd').value,baths:$('ba').value,status:$('sx').value,desc:$('de').value};
+ const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value,loc:$('lo').value,country:$('co').value.trim()||'Nigeria',currency:$('cu').value||'NGN',price:+$('pr').value,per:$('pe').value,beds:$('bd').value,baths:$('ba').value,status:$('sx').value,desc:$('de').value};
  if(!o.title||!o.price){alert('Add a title and a price.');return}
  if(edit){const l=S.listings.find(l=>l.id==edit);Object.assign(l,o);if(photo)l.photo=photo}else S.listings.unshift(Object.assign({id:uid(),photo},o));
  edit=null;photo='';save();render()}
@@ -126,9 +131,9 @@ function addLead(){const n=$('ln').value.trim();if(!n||!$('lp').value.trim()){al
 function setStage(id,s){const x=S.leads.find(x=>x.id==id);x.stage=s;if(s=='Closed – won'){const l=S.listings.find(l=>l.id==x.lid);if(l&&confirm('Mark "'+l.title+'" as Closed?'))l.status='Closed'}save();render()}
 function delLd(id){if(confirm('Delete this lead?')){S.leads=S.leads.filter(x=>x.id!=id);save();render()}}
 function vP(){$('v').innerHTML=`<div class="c"><h2 style="margin-top:0">24-hour push</h2><p class="mu">Work through these in order. Speed of response and same-day viewings drive results.</p>${PLAN.map((p,i)=>`<label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--tx);padding:6px 0"><input type="checkbox" style="width:auto;margin-top:4px" ${S.chk[i]?'checked':''} onchange="S.chk[${i}]=this.checked;save()"> ${p}</label>`).join('')}<div class="r"><button onclick="S.chk={};save();render()">Reset</button></div></div>`}
-function vS(){const s=S.set;$('v').innerHTML=`<div class="c"><h2 style="margin-top:0">Your details</h2><div class="g"><div><label>Business name</label><input id="sb" value="${esc(s.biz)}"></div><div><label>Phone / WhatsApp</label><input id="sp" value="${esc(s.phone)}" placeholder="08012345678"></div><div><label>Sale commission %</label><input id="ss" type="number" value="${s.sale}"></div><div><label>Rent commission %</label><input id="sr" type="number" value="${s.rent}"></div></div><div class="r"><button class="p" onclick="saveS()">Save</button></div></div>
+function vS(){const s=S.set;$('v').innerHTML=`<div class="c"><h2 style="margin-top:0">Business and market defaults</h2><div class="g"><div><label>Business name</label><input id="sb" value="${esc(s.biz)}"></div><div><label>Phone / WhatsApp (include country code)</label><input id="sp" value="${esc(s.phone)}" placeholder="+2348012345678"></div><div><label>Home country</label><input id="scountry" value="${esc(s.country||'Nigeria')}"></div><div><label>Default currency</label><select id="scurrency">${CURR.map(c=>`<option value="${c}" ${(s.currency||'NGN')==c?'selected':''}>${c}</option>`).join('')}</select></div><div><label>Sale commission %</label><input id="ss" type="number" value="${s.sale}"></div><div><label>Rent commission %</label><input id="sr" type="number" value="${s.rent}"></div></div><div class="r"><button class="p" onclick="saveS()">Save</button></div></div>
  ${acctCard()}${capCard()}<div class="c"><h2 style="margin-top:0">Backup</h2><p class="mu">Data lives in this browser only. Export regularly.</p><div class="r"><button onclick="exp()">Export backup</button><button onclick="$('imf').click()">Import backup</button><input id="imf" type="file" accept=".json" class="hide" onchange="imp(this)"></div></div>`}
-function saveS(){S.set={biz:$('sb').value,phone:$('sp').value,sale:+$('ss').value,rent:+$('sr').value};save();render()}
+function saveS(){S.set={biz:$('sb').value,phone:$('sp').value,sale:+$('ss').value,rent:+$('sr').value,country:$('scountry').value||'Nigeria',currency:$('scurrency').value||'NGN'};save();render()}
 function exp(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='property-desk-backup.json';a.click()}
 function imp(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{S=Object.assign(S,JSON.parse(r.result));save();render()}catch(e){alert('Invalid file')}};r.readAsText(f)}
 let fbL='';
@@ -178,6 +183,8 @@ function areasIn(t){
  S.listings.forEach(l=>String(l.loc||'').toLowerCase().split(/[,/]/).forEach(x=>{x=x.trim();if(x.length>2)set.add(x)}));
  const f=[...set].filter(a=>hasW(t,a)),sp=f.filter(a=>!CITIES.includes(a));
  return (sp.length?sp:f).map(a=>a.replace(/\b\w/g,c=>c.toUpperCase())).join(', ')}
+function countryIn(t){const z=String(t||'').toLowerCase();const names=['Nigeria','Ghana','Kenya','South Africa','United States','United Kingdom','Canada','Australia','United Arab Emirates','Saudi Arabia','Germany','France','Spain','Italy','Netherlands','Ireland','India','China','Japan','Singapore','New Zealand','Qatar','Egypt','Rwanda','Uganda','Tanzania','Senegal','Cameroon'];return names.find(c=>z.includes(c.toLowerCase()))||'Nigeria'}
+function currencyIn(t){const x=String(t||'').toUpperCase();return /\$|\bUSD\b/.test(x)?'USD':/£|\bGBP\b/.test(x)?'GBP':/€|\bEUR\b/.test(x)?'EUR':/\bZAR\b/.test(x)?'ZAR':/\bGHS\b/.test(x)?'GHS':/\bKES\b/.test(x)?'KES':/\bAED\b/.test(x)?'AED':/₦|\bNGN\b|\bN\s?\d/.test(x)?'NGN':'NGN'}
 function pReq(b){
  const t=b.replace(/https?:\/\/\S+/g,' ').toLowerCase(),ph=((b.match(PH)||[''])[0]).replace(/[\s-]/g,''),bud=amtOf(b);
  const rent=/\b(rent|rental|to let|lease|tenant|per annum|per year|yearly|monthly|per month)\b/.test(t),buy=/\b(buy|purchase|for sale|selling|sell|invest)/.test(t);
@@ -185,11 +192,11 @@ function pReq(b){
  let budget=bud;if(tx=='Rent'&&/\b(monthly|per month|a month|\/month)\b/.test(t))budget*=12;
  const um=b.match(/https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\S*/i);
  let nm=((b.match(/^\[?[\d\/,.: APMapm-]*\]?\s*-?\s*([A-Z][A-Za-z.' -]{1,28}):\s/)||[])[1]||'').trim();if(/^(budget|location|price|phone|contact|looking|need|wanted)/i.test(nm))nm='';
- return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),kind:kindOf(t),beds:bedsOf(b),budget}}
+ return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:kindOf(t),beds:bedsOf(b),budget}}
 function pLst(b){
  const t=b.toLowerCase(),rent=/\b(for rent|to let|to rent|rental|per annum|per year|yearly|per month|monthly)\b/.test(t);
  const x=bedsOf(b),k=kindOf(t),tx=rent?'Rent':'Sale';
- return {title:(x?x+'-bedroom ':'')+(k||'property')+(tx=='Rent'?' for rent':' for sale'),tx,loc:areasIn(t),kind:k,beds:x,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year'}}
+ return {title:(x?x+'-bedroom ':'')+(k||'property')+(tx=='Rent'?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:k,beds:x,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year'}}
 function sc(l,r){
  if(l.type!==r.tx||l.status!=='Available')return null;
  const ann=l.type=='Rent'&&l.per=='month'?l.price*12:l.price;
@@ -229,12 +236,12 @@ function draftUI(){const q=mMode=='req';
 function mSave(){
  let sk=0;
  mDraft.filter(d=>d.ok).forEach(d=>{
-  if(mMode=='req')S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,kind:d.kind,beds:d.beds,budget:d.budget,url:d.url||'',src:d.src,raw:d.raw,at:Date.now()});
+  if(mMode=='req')S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind,beds:d.beds,budget:d.budget,url:d.url||'',src:d.src,raw:d.raw,at:Date.now()});
   else if(!d.price)sk++;
-  else S.listings.unshift({id:uid(),photo:'',title:d.title,type:d.tx,kind:d.kind,loc:d.loc,price:d.price,per:d.per||'year',beds:d.beds||'',baths:'',status:'Available',desc:d.raw})});
+  else S.listings.unshift({id:uid(),photo:'',title:d.title,type:d.tx,kind:d.kind,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',price:d.price,per:d.per||'year',beds:d.beds||'',baths:'',status:'Available',desc:d.raw})});
  markInb(mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId));mDraft=null;mMode='';save();render();if(sk)alert(sk+' listing(s) were skipped because no price was found. Import them again with a price.')}
 function mCard(m){const l=m.l,r=m.r,saved=S.leads.some(x=>x.rid==r.id&&x.lid==l.id);
- return `<div class="c"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(r.name||'Prospect')} <span class="mu">${esc(r.phone||'')}</span></b><b style="color:var(--ac);font-size:20px">${m.s}%</b></div><div class="mu">Wants ${esc((r.beds?r.beds+'-bed ':'')+(r.kind||'property'))} to ${r.tx=='Rent'?'rent':'buy'} · ${esc(r.loc||'any area')} · ${r.budget?N(r.budget):'no budget stated'} · ${esc(r.src||'')}</div><div style="margin:6px 0"><b>→ ${esc(l.title)}</b> <span class="mu">${price(l)} · ${esc(l.loc)}</span></div><div class="mu">${m.why.map(x=>esc(x)).join('<br>')}</div><div class="r"><button class="p" onclick="mMsg('${r.id}','${l.id}')">Message prospect</button><button onclick="mLead('${r.id}','${l.id}')" ${saved?'disabled':''}>${saved?'Lead saved':'Save as lead'}</button><button onclick="kitId='${l.id}';tab='listings';render()">Marketing kit</button>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="fbL='${l.id}';tab='fb';render()">Post to Facebook groups</button></div></div>`}
+ return `<div class="c"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(r.name||'Prospect')} <span class="mu">${esc(r.phone||'')}</span></b><b style="color:var(--ac);font-size:20px">${m.s}%</b></div><div class="mu">Wants ${esc((r.beds?r.beds+'-bed ':'')+(r.kind||'property'))} to ${r.tx=='Rent'?'rent':'buy'} · ${esc(r.loc||'any area')}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget stated'} · ${esc(r.src||'')}</div><div class="mu">Available as at ${fmtDate(r.at)}</div><div style="margin:6px 0"><b>→ ${esc(l.title)}</b> <span class="mu">${price(l)} · ${esc(l.loc)}</span></div><div class="mu">${m.why.map(x=>esc(x)).join('<br>')}</div><div class="r"><button class="p" onclick="mMsg('${r.id}','${l.id}')">Message prospect</button><button onclick="mLead('${r.id}','${l.id}')" ${saved?'disabled':''}>${saved?'Lead saved':'Save as lead'}</button><button onclick="kitId='${l.id}';tab='listings';render()">Marketing kit</button>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="fbL='${l.id}';tab='fb';render()">Post to Facebook groups</button></div></div>`}
 function mMsg(rid,lid){
  const r=S.reqs.find(x=>x.id==rid),l=S.listings.find(x=>x.id==lid);
  const t=`Hello${r.name?' '+r.name:''}, you asked about ${r.beds?r.beds+'-bedroom ':''}${r.kind||'a property'} ${r.tx=='Rent'?'to rent':'to buy'}${r.loc?' around '+r.loc:''}. I have this available:\n\n${txt(l)}\n\nWould you like to view it today?`;
@@ -250,7 +257,7 @@ let mW='';
 const mReqTxt=r=>`${r.beds?r.beds+'-bedroom ':''}${r.kind||'property'} ${r.tx=='Rent'?'to rent':'to buy'}${r.loc?' around '+r.loc:''}`;
 function mReq(r){
  const n=S.listings.filter(l=>{const x=sc(l,r);return x&&x.s>=mMin}).length,lead=S.leads.some(x=>x.rid==r.id);
- return `<div class="c"><b>${esc(r.name||'Prospect')}</b> <span class="tag">${esc(r.tx)}</span><span class="tag">${esc(r.src||'')}</span> <span class="mu">${esc(r.phone||'')}</span><div class="mu">${esc(mReqTxt(r))} · ${r.budget?N(r.budget):'no budget'} · ${n} matching listings</div><div class="mu">${esc(r.raw.slice(0,160))}</div><div class="r">${r.phone?`<button class="p" onclick="mHello('${r.id}')">WhatsApp</button>`:''}${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="mLead('${r.id}','')" ${lead?'disabled':''}>${lead?'Lead saved':'Save as lead'}</button><button onclick="mW=mW=='${r.id}'?'':'${r.id}';render()">Post wanted in groups</button><button class="d" onclick="if(confirm('Delete this request?')){S.reqs=S.reqs.filter(x=>x.id!='${r.id}');save();render()}">Delete</button></div>${mW==r.id?wantedUI(r):''}</div>`}
+ return `<div class="c"><b>${esc(r.name||'Prospect')}</b> <span class="tag">${esc(r.tx)}</span><span class="tag">${esc(r.src||'')}</span> <span class="mu">${esc(r.phone||'')}</span><div class="mu">${esc(mReqTxt(r))}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget'} · ${n} matching listings</div><div class="mu">Available as at ${fmtDate(r.at)}</div><div class="mu">${esc(r.raw.slice(0,160))}</div><div class="r">${r.phone?`<button class="p" onclick="mHello('${r.id}')">WhatsApp</button>`:''}${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="mLead('${r.id}','')" ${lead?'disabled':''}>${lead?'Lead saved':'Save as lead'}</button><button onclick="mW=mW=='${r.id}'?'':'${r.id}';render()">Post wanted in groups</button><button class="d" onclick="if(confirm('Delete this request?')){S.reqs=S.reqs.filter(x=>x.id!='${r.id}');save();render()}">Delete</button></div>${mW==r.id?wantedUI(r):''}</div>`}
 function mHello(rid){
  const r=S.reqs.find(x=>x.id==rid),ms=S.listings.map(l=>({l,x:sc(l,r)})).filter(o=>o.x&&o.x.s>=60).sort((a,b)=>b.x.s-a.x.s);
  const t=`Hello${r.name?' '+r.name:''}, I saw your request for ${mReqTxt(r)}.`+(ms.length?` I have ${ms.length} option${ms.length>1?'s':''} that may suit you:\n\n${ms.slice(0,3).map(o=>'• '+o.l.title+' – '+price(o.l)+' ('+o.l.loc+')').join('\n')}\n\nWhen can you view?`:` I am checking available options and will get back to you shortly. Could you confirm your budget and preferred area?`)+`\n\n${S.set.biz}${S.set.phone?' '+S.set.phone:''}`;
