@@ -238,14 +238,34 @@ function classifyMixed(b){
  if(l>r+1)return 'listing';
  return 'review';
 }
+function sourceMeta(raw,src){
+ const meta={poster:'',phone:'',group:'',profileUrl:'',postUrl:'',postedAt:'',importedAt:Date.now()};
+ const wa=/^(\d{1,2}\/\d{1,2}\/\d{2,4}),?\s+(\d{1,2}:\d{2}\s*[AP]M)\s+-\s+([^:]+):\s*([\s\S]*)$/i.exec(raw.trim());
+ if(wa){const sender=wa[3].trim();meta.poster=sender;meta.postedAt=(wa[1]+' '+wa[2]).trim();if(/^(?:\+?234|0)[789]\d[\d\s-]{7,12}$/.test(sender))meta.phone=sender;else{const p=(wa[4].match(PH)||[])[0];if(p)meta.phone=p;}}
+ else if(/facebook/i.test(src)||/facebook\.com|fb\.com|fb\.watch/i.test(raw)){
+  const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(lines.length&&lines[0].length<65&&!/^(search facebook|facebook|public group|about|see more|\d+\s*(hours?|minutes?|days?) ago)/i.test(lines[0]))meta.poster=lines[0];
+  const age=raw.match(/\b(?:about an hour|\d+\s+(?:minutes?|hours?|days?|weeks?))\s+ago\b/i);if(age)meta.postedAt=age[0];
+  const u=raw.match(/https?:\/\/\S*(?:facebook\.com|fb\.com)\S*/i);if(u)meta.postUrl=u[0].replace(/[),.]+$/,'');
+ }
+ return meta;
+}
+function splitWhatsApp(text){
+ const re=/(?:^|\n)(\d{1,2}\/\d{1,2}\/\d{2,4}),?\s+\d{1,2}:\d{2}\s*[AP]M\s+-\s+[^:\n]+:\s*/gi;
+ const matches=[...text.matchAll(re)];if(matches.length<2)return null;
+ return matches.map((m,i)=>text.slice(m.index+m[0].length,matches[i+1]?matches[i+1].index:text.length).trim()).filter(x=>x.length>8).map((body,i)=>matches[i][0].trim().replace(/^\n/, '')+body);
+}
 function mParse(){
- const bl=$('mt').value.split(/\n\s*\n|\n-{3,}\n/).map(s=>s.trim()).filter(s=>s.length>12);
- if(!bl.length){alert('Paste messages first. Separate each entry with a blank line.');return}
- const src=$('ms')?$('ms').value:'';
+ const rawText=$('mt').value,src=$('ms')?$('ms').value:'';
+ const waBlocks=/whatsapp/i.test(src)?splitWhatsApp(rawText):null;
+ const bl=(waBlocks||rawText.split(/\n\s*\n|\n-{3,}\n/)).map(s=>s.trim()).filter(s=>s.length>12);
+ if(!bl.length){alert('Paste messages first.');return}
+ const fbGroup=(rawText.match(/(?:Houses? for rent|Properties? for sale|Real estate)[^\n]{0,90}/i)||[])[0]||'';
  mDraft=bl.map(b=>{
-  const classification=mMode=='mixed'?classifyMixed(b):(mMode=='req'?'request':'listing');
-  const d=classification=='listing'?pLst(b):pReq(b);
-  return Object.assign(d,{classification,raw:b,ok:true,src:/facebook\.com|fb\.com|fb\.watch/i.test(b)?'Facebook':src});
+  const sm=sourceMeta(b,src), body=(/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}\s*[AP]M\s+-\s+[^:]+:\s*/i.test(b)?b.replace(/^\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}\s*[AP]M\s+-\s+[^:]+:\s*/i,''):b);
+  const classification=mMode=='mixed'?classifyMixed(body):(mMode=='req'?'request':'listing');
+  const d=classification=='listing'?pLst(body):pReq(body);
+  return Object.assign(d,{classification,raw:b,ok:true,src:/facebook\.com|fb\.com|fb\.watch/i.test(b)?'Facebook':src,poster:sm.poster,phone:sm.phone||d.phone,group:fbGroup,profileUrl:sm.profileUrl,postUrl:sm.postUrl,postedAt:sm.postedAt,importedAt:sm.importedAt});
  });
  render();
 }
@@ -275,9 +295,9 @@ function mSave(){
   const kind=mMode=='req'?'request':mMode=='lst'?'listing':d.classification;
   if(kind=='review'){review++;remaining.push(d);return}
   if(kind=='request'){
-   S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind,beds:d.beds,budget:d.budget,url:d.url||'',src:d.src,raw:d.raw,at:Date.now()});reqs++;
+   const dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===String(d.raw||'').trim());if(dup)return;S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind,beds:d.beds,budget:d.budget,url:d.postUrl||d.url||'',postUrl:d.postUrl||d.url||'',profileUrl:d.profileUrl||'',poster:d.poster||d.name||'',group:d.group||'',postedAt:d.postedAt||'',importedAt:d.importedAt||Date.now(),src:d.src,raw:d.raw,at:Date.now()});reqs++;
   }else if(!d.price||!d.title){sk++;remaining.push(d)}
-  else{S.listings.unshift({id:uid(),photo:'',title:d.title,type:d.tx,kind:d.kind,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',price:d.price,per:d.per||'year',beds:d.beds||'',baths:'',status:'Available',desc:d.raw});lsts++}
+  else{S.listings.unshift({id:uid(),photo:'',title:d.title,type:d.tx,kind:d.kind,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',price:d.price,per:d.per||'year',beds:d.beds||'',baths:'',status:'Available',desc:d.raw,src:d.src,group:d.group||'',poster:d.poster||'',phone:d.phone||'',profileUrl:d.profileUrl||'',postUrl:d.postUrl||'',postedAt:d.postedAt||'',importedAt:d.importedAt||Date.now(),raw:d.raw});lsts++}
  });
  const unchecked=mDraft.filter(d=>!d.ok);mDraft=remaining.concat(unchecked);
  markInb(mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId));save();
@@ -285,7 +305,7 @@ function mSave(){
  const notes=[];if(reqs)notes.push(reqs+' request(s) saved');if(lsts)notes.push(lsts+' listing(s) saved');if(review)notes.push(review+' item(s) remain for classification');if(sk)notes.push(sk+' listing(s) need a title and price');if(notes.length)alert(notes.join('. ')+'.');
 }
 function mCard(m){const l=m.l,r=m.r,saved=S.leads.some(x=>x.rid==r.id&&x.lid==l.id);
- return `<div class="c"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(r.name||'Prospect')} <span class="mu">${esc(r.phone||'')}</span></b><b style="color:var(--ac);font-size:20px">${m.s}%</b></div><div class="mu">Wants ${esc((r.beds?r.beds+'-bed ':'')+(r.kind||'property'))} to ${r.tx=='Rent'?'rent':'buy'} · ${esc(r.loc||'any area')}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget stated'} · ${esc(r.src||'')}</div><div class="mu">Available as at ${fmtDate(r.at)}</div><div style="margin:6px 0"><b>→ ${esc(l.title)}</b> <span class="mu">${price(l)} · ${esc(l.loc)}</span></div><div class="mu">${m.why.map(x=>esc(x)).join('<br>')}</div><div class="r"><button class="p" onclick="mMsg('${r.id}','${l.id}')">Message prospect</button><button onclick="mLead('${r.id}','${l.id}')" ${saved?'disabled':''}>${saved?'Lead saved':'Save as lead'}</button><button onclick="kitId='${l.id}';tab='listings';render()">Marketing kit</button>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="fbL='${l.id}';tab='fb';render()">Post to Facebook groups</button></div></div>`}
+ return `<div class="c"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(r.name||'Prospect')} <span class="mu">${esc(r.phone||'')}</span></b><b style="color:var(--ac);font-size:20px">${m.s}%</b></div><div class="mu">Wants ${esc((r.beds?r.beds+'-bed ':'')+(r.kind||'property'))} to ${r.tx=='Rent'?'rent':'buy'} · ${esc(r.loc||'any area')}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget stated'} · ${esc(r.src||'')}</div><div class="mu">Available as at ${fmtDate(r.at)}</div><div style="margin:6px 0"><b>→ ${esc(l.title)}</b> <span class="mu">${price(l)} · ${esc(l.loc)}</span></div><div class="mu">${m.why.map(x=>esc(x)).join('<br>')}</div><div class="r"><button class="p" onclick="mMsg('${r.id}','${l.id}')">Message prospect</button>${r.phone?`<a class="btn" href="tel:${esc(r.phone)}">Call</a>`:''}<button onclick="mLead('${r.id}','${l.id}')" ${saved?'disabled':''}>${saved?'Lead saved':'Save as lead'}</button><button onclick="kitId='${l.id}';tab='listings';render()">Marketing kit</button>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="fbL='${l.id}';tab='fb';render()">Post to Facebook groups</button></div></div>`}
 function mMsg(rid,lid){
  const r=S.reqs.find(x=>x.id==rid),l=S.listings.find(x=>x.id==lid);
  const t=`Hello${r.name?' '+r.name:''}, you asked about ${r.beds?r.beds+'-bedroom ':''}${r.kind||'a property'} ${r.tx=='Rent'?'to rent':'to buy'}${r.loc?' around '+r.loc:''}. I have this available:\n\n${txt(l)}\n\nWould you like to view it today?`;
@@ -293,7 +313,7 @@ function mMsg(rid,lid){
  else{if(r.url)window.open(r.url,'_blank');try{navigator.clipboard.writeText(t).then(()=>alert('No phone number saved, so the message was copied. Paste it into their Facebook or WhatsApp chat.'))}catch(e){prompt('Copy this message',t)}}}
 function mLead(rid,lid){
  const r=S.reqs.find(x=>x.id==rid);
- S.leads.unshift({id:uid(),rid,name:r.name||'Prospect',phone:r.phone||'',lid,src:r.src||'Other',url:r.url||'',fu:new Date().toISOString().slice(0,10),note:r.raw.slice(0,140),stage:'New'});
+ S.leads.unshift({id:uid(),rid,name:r.name||'Prospect',phone:r.phone||'',lid,src:r.src||'Other',url:r.postUrl||r.url||'',postUrl:r.postUrl||r.url||'',profileUrl:r.profileUrl||'',group:r.group||'',poster:r.poster||r.name||'',postedAt:r.postedAt||'',importedAt:r.importedAt||r.at||Date.now(),fu:new Date().toISOString().slice(0,10),note:(r.raw||'').slice(0,140),stage:'New'});
  save();render()}
 
 /* ===== Matchmaker sync ===== */
@@ -301,7 +321,7 @@ let mW='';
 const mReqTxt=r=>`${r.beds?r.beds+'-bedroom ':''}${r.kind||'property'} ${r.tx=='Rent'?'to rent':'to buy'}${r.loc?' around '+r.loc:''}`;
 function mReq(r){
  const n=S.listings.filter(l=>{const x=sc(l,r);return x&&x.s>=mMin}).length,lead=S.leads.some(x=>x.rid==r.id);
- return `<div class="c"><b>${esc(r.name||'Prospect')}</b> <span class="tag">${esc(r.tx)}</span><span class="tag">${esc(r.src||'')}</span> <span class="mu">${esc(r.phone||'')}</span><div class="mu">${esc(mReqTxt(r))}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget'} · ${n} matching listings</div><div class="mu">Available as at ${fmtDate(r.at)}</div><div class="mu">${esc(r.raw.slice(0,160))}</div><div class="r">${r.phone?`<button class="p" onclick="mHello('${r.id}')">WhatsApp</button>`:''}${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="mLead('${r.id}','')" ${lead?'disabled':''}>${lead?'Lead saved':'Save as lead'}</button><button onclick="mW=mW=='${r.id}'?'':'${r.id}';render()">Post wanted in groups</button><button class="d" onclick="if(confirm('Delete this request?')){S.reqs=S.reqs.filter(x=>x.id!='${r.id}');save();render()}">Delete</button></div>${mW==r.id?wantedUI(r):''}</div>`}
+ return `<div class="c"><b>${esc(r.name||'Prospect')}</b> <span class="tag">${esc(r.tx)}</span><span class="tag">${esc(r.src||'')}</span> <span class="mu">${esc(r.phone||'')}</span><div class="mu">${esc(mReqTxt(r))}${r.country?', '+esc(r.country):''} · ${r.budget?N(r.budget,r.currency||'NGN'):'no budget'} · ${n} matching listings</div><div class="mu">${esc(r.group||'')} · Posted: ${esc(r.postedAt||'date not supplied')} · Imported: ${new Date(r.importedAt||r.at||Date.now()).toLocaleString('en-NG')}</div><div class="mu">${esc(r.raw.slice(0,160))}</div><div class="r">${r.phone?`<button class="p" onclick="mHello('${r.id}')">WhatsApp</button><a class="btn" href="tel:${esc(r.phone)}">Call sender</a>`:''}${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open on Facebook</a>`:''}<button onclick="mLead('${r.id}','')" ${lead?'disabled':''}>${lead?'Lead saved':'Save as lead'}</button><button onclick="mW=mW=='${r.id}'?'':'${r.id}';render()">Post wanted in groups</button><button class="d" onclick="if(confirm('Delete this request?')){S.reqs=S.reqs.filter(x=>x.id!='${r.id}');save();render()}">Delete</button></div>${mW==r.id?wantedUI(r):''}</div>`}
 function mHello(rid){
  const r=S.reqs.find(x=>x.id==rid),ms=S.listings.map(l=>({l,x:sc(l,r)})).filter(o=>o.x&&o.x.s>=60).sort((a,b)=>b.x.s-a.x.s);
  const t=`Hello${r.name?' '+r.name:''}, I saw your request for ${mReqTxt(r)}.`+(ms.length?` I have ${ms.length} option${ms.length>1?'s':''} that may suit you:\n\n${ms.slice(0,3).map(o=>'• '+o.l.title+' – '+price(o.l)+' ('+o.l.loc+')').join('\n')}\n\nWhen can you view?`:` I am checking available options and will get back to you shortly. Could you confirm your budget and preferred area?`)+`\n\n${S.set.biz}${S.set.phone?' '+S.set.phone:''}`;
