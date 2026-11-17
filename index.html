@@ -30,7 +30,7 @@ label{font-size:12px;color:var(--mu);display:block;margin-bottom:2px}
 .hide{display:none}a.btn{display:inline-block;text-decoration:none;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;color:var(--tx)}
 #pa{display:none}
 @media print{body>.w{display:none}#pa{display:block;color:#000;background:#fff}}
-#auth{position:fixed;inset:0;background:var(--bg);z-index:50;padding:12px;overflow:auto;display:none}
+/* Login screen removed; dashboard is the app entry point. */
 .w{padding-bottom:96px}
 input,select,textarea{font-size:16px}button,a.btn{min-height:40px}
 nav button{position:relative}
@@ -271,137 +271,24 @@ function fbReqs(){
  const q=S.reqs.filter(r=>r.src=='Facebook'||r.url);
  return '<div class="c"><h2 style="margin-top:0">Requests from Facebook</h2>'+(q.length?q.map(r=>`<div class="r" style="align-items:center;margin:4px 0"><span style="flex:1;min-width:150px"><b>${esc(r.name||'Prospect')}</b> <span class="mu">${esc(mReqTxt(r))}</span></span>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open post</a>`:''}<button onclick="tab='match';render()">Matches</button><button onclick="mLead('${r.id}','')" ${S.leads.some(x=>x.rid==r.id)?'disabled':''}>Save lead</button></div>`).join(''):'<p class="mu">No Facebook requests imported yet.</p>')+'<div class="r"><button onclick="tab=\'match\';mMode=\'req\';mDraft=null;render()">Import requests</button></div></div>'}
 
-/* ===== Supabase sync (match Maker project) ===== */
-const SB='https://syujpnyxuhjvscyltdeb.supabase.co',KEY='sb_publishable_e4H9nnNMGqPiLnPix2U85w_aBI_oITK';
-const COL={desk_listings:['id','title','type','kind','loc','price','per','beds','baths','status','photo','desc'],desk_requests:['id','name','phone','url','tx','loc','kind','beds','budget','src','raw','at','lead'],desk_leads:['id','rid','lid','name','phone','url','src','fu','note','stage'],desk_groups:['id','name','url','n','last']};
-const MAP={desk_listings:'listings',desk_requests:'reqs',desk_leads:'leads',desk_groups:'groups'};
-const ORD={desk_listings:'order=created_at.desc',desk_requests:'order=created_at.desc',desk_leads:'order=created_at.desc',desk_groups:'order=created_at.asc',desk_settings:''};
-const NUMC=new Set(['price','beds','baths','budget']),ZERO=new Set(['at','n','last']);
-const blank=()=>({listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,rent:10},chk:{},groups:[],reqs:[]});
-let sess=null,snap={},busy=false,dirty=false,st='',dip=null,tmr=0;
-try{sess=JSON.parse(localStorage.getItem('pd_sess'));snap=JSON.parse(localStorage.getItem('pd_snap'))||{}}catch(e){}
+/* ===== Local-first mode: authentication removed ===== */
+let sess=null,snap={},busy=false,dirty=false,st='Local only';
 const setSt=m=>{st=m;['sy','sy2'].forEach(i=>{const e=document.getElementById(i);if(e)e.textContent=m})};
-const qsync=()=>{clearTimeout(tmr);tmr=setTimeout(sync,500)};
-function setSess(j){sess={access_token:j.access_token,refresh_token:j.refresh_token,exp:j.expires_at||Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:(j.user&&j.user.id)||(sess&&sess.uid),email:(j.user&&j.user.email)||(sess&&sess.email)};localStorage.setItem('pd_sess',JSON.stringify(sess))}
-async function token(){
- if(!sess)return null;
- if(sess.exp-Date.now()/1000<90){
-  const r=await fetch(SB+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:sess.refresh_token})});
-  if(r.status==400||r.status==401){signOut();return null}
-  if(!r.ok)throw new Error('offline');
-  setSess(await r.json())}
- return sess.access_token}
-async function api(path,o={}){
- const t=await token();if(!t)throw new Error('auth');
- const r=await fetch(SB+path,Object.assign({},o,{headers:Object.assign({apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},o.headers||{})}));
- if(!r.ok)throw new Error(path.split('?')[0]+' '+r.status+' '+(await r.text()).slice(0,150));
- return r.status==204?null:r.json().catch(()=>null)}
-function toRow(t,it){const o={};
- for(const c of COL[t]){let v=it[c];
-  if(NUMC.has(c)||ZERO.has(c)){v=(v===''||v==null||isNaN(+v))?null:+v;if((c=='beds'||c=='baths')&&v!=null)v=Math.round(v);if(v==null&&(c=='price'||ZERO.has(c)))v=0}
-  else if(c=='lead')v=!!v;
-  else if(c=='fu')v=v||null;
-  else v=v==null?'':String(v);
-  o[c]=v}
- return o}
-function fromRow(t,r){const o={};for(const c of COL[t]){let v=r[c];if(v==null)v=ZERO.has(c)?0:c=='lead'?false:'';o[c]=v}return o}
-const setObj=()=>({user_id:sess.uid,biz:S.set.biz||'',phone:S.set.phone||'',sale_comm:+S.set.sale||0,rent_comm:+S.set.rent||0,checks:S.chk||{}});
-function rowsNow(){const o={};for(const t in COL){S[MAP[t]].forEach(it=>{if(!it.id)it.id=uid()});o[t]=new Map(S[MAP[t]].map(it=>[it.id,toRow(t,it)]))}return o}
-async function upPhoto(d){
- const b=await (await fetch(d)).blob(),p=sess.uid+'/'+Date.now()+'.jpg',t=await token();
- const r=await fetch(SB+'/storage/v1/object/desk-photos/'+p,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+t,'Content-Type':'image/jpeg'},body:b});
- if(!r.ok)throw new Error('photo '+r.status);
- return SB+'/storage/v1/object/public/desk-photos/'+p}
-async function sync(){
- if(!sess)return;if(busy){dirty=true;return}
- busy=true;dirty=false;setSt('Syncing…');
- try{
-  for(const l of S.listings)if(String(l.photo||'').startsWith('data:')){l.photo=await upPhoto(l.photo);cache()}
-  const now=rowsNow();
-  for(const t in COL){
-   const old=snap[t]||{},up=[],del=[];
-   now[t].forEach((r,id)=>{if(JSON.stringify(r)!==old[id])up.push(r)});
-   Object.keys(old).forEach(id=>{if(!now[t].has(id))del.push(id)});
-   if(up.length)await api('/rest/v1/'+t+'?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(up)});
-   if(del.length)await api('/rest/v1/'+t+'?id=in.('+del.map(i=>'"'+i+'"').join(',')+')',{method:'DELETE'});
-   snap[t]={};now[t].forEach((r,id)=>{snap[t][id]=JSON.stringify(r)})}
-  const sj=JSON.stringify(setObj());
-  if(snap.set!==sj){await api('/rest/v1/desk_settings?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:sj});snap.set=sj}
-  setSt('✓ Saved')
- }catch(e){setSt(e.message=='auth'?'Sign in again':'⚠ Offline: saved on phone, will sync');console.warn(e)}
- finally{try{localStorage.setItem('pd_snap',JSON.stringify(snap))}catch(e){}busy=false}
- if(dirty)sync()}
-async function pull(){
- const res={};
- await Promise.all(Object.keys(ORD).map(async t=>{res[t]=await api('/rest/v1/'+t+'?select=*'+(ORD[t]?'&'+ORD[t]:''))}));
- for(const t in COL)S[MAP[t]]=(res[t]||[]).map(r=>fromRow(t,r));
- const s=(res.desk_settings||[])[0];
- if(s){S.set={biz:s.biz||'',phone:s.phone||'',sale:s.sale_comm,rent:s.rent_comm};S.chk=s.checks||{}}
- const now=rowsNow();snap={};for(const t in COL){snap[t]={};now[t].forEach((r,id)=>{snap[t][id]=JSON.stringify(r)})}
- if(s)snap.set=JSON.stringify(setObj());
- localStorage.setItem('pd_snap',JSON.stringify(snap))}
-async function boot(){
- hideAuth();
- if(localStorage.getItem('pd_uid')!==sess.uid){S=blank();snap={};localStorage.setItem('pd_uid',sess.uid)}
- render();
- try{await sync();await pull();await loadInb();cache();render();setSt('✓ Synced')}catch(e){setSt('⚠ Offline: showing saved data')}}
-async function syncNow(){await sync();try{await pull();cache();render();setSt('✓ Synced')}catch(e){setSt('⚠ Offline: showing saved data')}}
-function signOut(){INB=[];cap=null;sess=null;snap={};['pd_sess','pd_snap','pd_uid',K].forEach(k=>localStorage.removeItem(k));S=blank();render();showAuth()}
-function hideAuth(){const a=document.getElementById('auth');if(a)a.style.display='none'}
-function showAuth(m){
- let a=document.getElementById('auth');
- if(!a){document.body.insertAdjacentHTML('beforeend','<div id="auth"><div class="c" style="max-width:380px;margin:10vh auto 0"><h1>Property Desk</h1><p class="mu">Sign in to open your listings, requests and leads on any device.</p><label>Email</label><input id="ae" type="email" autocomplete="username"><label style="margin-top:8px">Password</label><input id="ap" type="password" autocomplete="current-password"><p id="am" class="mu" style="min-height:20px"></p><div class="r"><button class="p" onclick="doAuth(false)">Sign in</button><button onclick="doAuth(true)">Create account</button></div></div></div>');a=document.getElementById('auth')}
- a.style.display='block';if(m)document.getElementById('am').textContent=m}
-async function doAuth(up){
- const e=$('ae').value.trim(),p=$('ap').value,m=$('am');
- if(!e||p.length<6){m.textContent='Enter your email and a password of at least 6 characters.';return}
- m.textContent='Please wait…';
- try{
-  const r=await fetch(SB+(up?'/auth/v1/signup':'/auth/v1/token?grant_type=password'),{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok){m.textContent=j.msg||j.error_description||j.message||'Could not sign in.';return}
-  if(!j.access_token){m.textContent='Account created. Check your email to confirm it, then sign in.';return}
-  setSess(j);boot()
- }catch(x){m.textContent='No connection. Connect to the internet to sign in.'}}
-function acctCard(){return `<div class="c"><h2 style="margin-top:0">Account and sync</h2><p class="mu">${esc(sess&&sess.email||'')}<br><span id="sy2">${esc(st)}</span></p><div class="r"><button class="p" onclick="syncNow()">Sync now</button>${dip?'<button onclick="dip.prompt();dip=null;render()">Install on phone</button>':''}<button class="d" onclick="if(confirm(\'Sign out of this phone?\'))signOut()">Sign out</button></div></div>`}
-addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e});
-addEventListener('online',()=>sync());
-setInterval(()=>{if(sess&&navigator.onLine&&!busy)sync()},30000);
+const sync=async()=>{setSt('Saved on this device')};
+async function syncNow(){cache();setSt('Saved on this device');alert('Your data is saved in this browser. Use Settings → Backup to move it to another device')}
+function acctCard(){return '<div class="c"><h2 style="margin-top:0">Storage and device access</h2><p class="mu">The app opens directly without an account. Listings, requests, leads and settings are saved locally in this browser on this device. Automatic cloud sync is disabled in this no-login version.</p><div class="r"><button class="p" onclick="exp()">Export full backup</button><button onclick="$(\'imf\').click()">Import backup</button></div></div>'}
+function capCard(){return '<div class="c"><h2 style="margin-top:0">Message capture</h2><p class="mu">Automatic phone-notification capture is not active in this no-login version. The previous workflow required an authenticated Supabase account and a private capture key. You can still paste or upload messages in Match → Import requests.</p></div>'}
+function qsync(){}
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-
-/* ===== Phone notification inbox ===== */
+addEventListener('online',()=>setSt('Online · local storage active'));
+/* ===== Inbox placeholder in local-first edition ===== */
 let INB=[],cap=null;
 const appSrc=a=>/whatsapp/i.test(a)?'WhatsApp':/facebook|messenger|fb/i.test(a)?'Facebook':'Other';
-function inbHTML(){
- if(!INB.length)return '';
- return `<div class="c"><h2 style="margin-top:0">Captured from your phone (${INB.length})</h2><p class="mu">Property messages and notifications forwarded from your phone. Check each one before it goes in.</p>`+
- INB.slice(0,20).map(n=>`<div class="c" style="margin:8px 0 0"><div class="mu">${esc(n.app||'App')} · ${esc(new Date(n.received_at).toLocaleString('en-NG',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}))}</div><div>${n.title?'<b>'+esc(n.title)+'</b><br>':''}${esc((n.body||'').slice(0,300))}</div><div class="r"><button class="p" onclick="inbAdd(['${n.id}'],'req')">Add as request</button><button onclick="inbAdd(['${n.id}'],'lst')">Add as listing</button><button class="d" onclick="inbSet(['${n.id}'],'dismissed')">Dismiss</button></div></div>`).join('')+
- `<div class="r"><button class="p" onclick="inbAdd(INB.slice(0,20).map(n=>n.id),'req')">Add all as requests</button><button onclick="if(confirm('Dismiss all captured items?'))inbSet(INB.map(n=>n.id),'dismissed')">Dismiss all</button></div></div>`}
-function drawInb(){const e=document.getElementById('inb');if(e)e.innerHTML=inbHTML();nav()}
-async function loadInb(){try{INB=(await api('/rest/v1/desk_inbox?select=*&status=eq.new&order=received_at.desc&limit=100'))||[];const c=await api('/rest/v1/desk_ingest?select=token');cap=c&&c[0]?c[0].token:null;drawInb()}catch(e){}}
-async function inbSet(ids,status){
- if(!ids.length)return;
- try{await api('/rest/v1/desk_inbox?id=in.('+ids.join(',')+')',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status})})}catch(e){return}
- INB=INB.filter(n=>!ids.includes(n.id));drawInb()}
-const markInb=ids=>inbSet(ids,'imported');
-function inbAdd(ids,k){
- const items=INB.filter(n=>ids.includes(n.id));if(!items.length)return;
- mMode=k;tab='match';
- mDraft=items.map(n=>{const raw=(n.title?n.title+': ':'')+(n.body||'');
-  return Object.assign(k=='req'?pReq(raw):pLst(raw),{raw,ok:true,inboxId:n.id,src:appSrc(n.app)})});
- render()}
-async function capNew(){
- const a=new Uint8Array(32);crypto.getRandomValues(a);const t=[...a].map(x=>x.toString(16).padStart(2,'0')).join('');
- try{await api('/rest/v1/desk_ingest?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:sess.uid,token:t})});cap=t;render()}
- catch(e){alert('Could not create the key. Check your connection and try again.')}}
-function capCard(){
- const u=SB+'/functions/v1/ingest';
- return `<div class="c"><h2 style="margin-top:0">Capture phone notifications</h2><p class="mu">Forward property messages and notifications from WhatsApp, Facebook and other apps into your Inbox. One-time setup of about 10 minutes in MacroDroid or Tasker.</p>`+
- (cap?`<label>Address (POST)</label><input readonly value="${u}" onclick="this.select()"><label style="margin-top:8px">Capture key (keep private)</label><input readonly value="${esc(cap)}" onclick="this.select()"><div class="r"><button onclick="navigator.clipboard.writeText('${u}')">Copy address</button><button onclick="navigator.clipboard.writeText(cap)">Copy key</button><button class="d" onclick="if(confirm('Make a new key? The old one stops working.'))capNew()">New key</button></div>
- <details style="margin-top:10px"><summary>Setup steps</summary><ol class="mu" style="padding-left:18px"><li>Install MacroDroid (or Tasker) and allow Notification access when it asks.</li><li>New macro, trigger: Notification Received. Pick WhatsApp, WhatsApp Business, Facebook, Messenger and any property apps you use. Leave out banking and OTP apps.</li><li>Action: HTTP Request, method POST, URL = the address above.</li><li>Add a header named x-capture-key with your key, and set the content type to JSON.</li><li>Body: {"app":"APP","title":"TITLE","text":"TEXT"}. Replace APP, TITLE and TEXT with MacroDroid's notification app name, title and text variables from its magic-text list.</li><li>Save, then turn off battery optimisation for MacroDroid so it keeps running.</li></ol><p class="mu">Only property-related messages are kept. Everything else is discarded without being stored.</p></details>`
- :`<div class="r"><button class="p" onclick="capNew()">Create capture key</button></div>`)+'</div>'}
-addEventListener('visibilitychange',()=>{if(!document.hidden&&sess&&navigator.onLine)loadInb()});
-setInterval(()=>{if(sess&&navigator.onLine)loadInb()},30000);
+function inbHTML(){return ''}
+function drawInb(){}
+async function loadInb(){}
+async function inbSet(){}
+const markInb=()=>{};
+function inbAdd(){alert('Paste the message in Match → Import requests')}
 
-if(sess)boot();else{render();showAuth()}
 </script></body></html>
