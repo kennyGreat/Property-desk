@@ -48,6 +48,8 @@ let S={listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,re
 try{const x=localStorage.getItem(K);if(x)S=Object.assign(S,JSON.parse(x))}catch(e){}
 const cache=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};const save=()=>{cache();qsync()};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const COUNTRIES=["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czechia","Democratic Republic of the Congo","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+const NG_STATES=["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT Abuja","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 const CURR=['NGN','USD','GBP','EUR','CAD','AUD','ZAR','GHS','KES','UGX','TZS','AED','SAR','INR','CNY','JPY','CHF'];
 const N=(n,c=(S.set&&S.set.currency)||'NGN')=>{try{return new Intl.NumberFormat(undefined,{style:'currency',currency:c,maximumFractionDigits:0}).format(Number(n||0))}catch(e){return c+' '+Number(n||0).toLocaleString()}};
 const fmtDate=v=>v?new Date(v).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}):'Date not recorded';
@@ -183,8 +185,8 @@ function areasIn(t){
  S.listings.forEach(l=>String(l.loc||'').toLowerCase().split(/[,/]/).forEach(x=>{x=x.trim();if(x.length>2)set.add(x)}));
  const f=[...set].filter(a=>hasW(t,a)),sp=f.filter(a=>!CITIES.includes(a));
  return (sp.length?sp:f).map(a=>a.replace(/\b\w/g,c=>c.toUpperCase())).join(', ')}
-function countryIn(t){const z=String(t||'').toLowerCase();const names=['Nigeria','Ghana','Kenya','South Africa','United States','United Kingdom','Canada','Australia','United Arab Emirates','Saudi Arabia','Germany','France','Spain','Italy','Netherlands','Ireland','India','China','Japan','Singapore','New Zealand','Qatar','Egypt','Rwanda','Uganda','Tanzania','Senegal','Cameroon'];return names.find(c=>z.includes(c.toLowerCase()))||'Nigeria'}
-function currencyIn(t){const x=String(t||'').toUpperCase();return /\$|\bUSD\b/.test(x)?'USD':/£|\bGBP\b/.test(x)?'GBP':/€|\bEUR\b/.test(x)?'EUR':/\bZAR\b/.test(x)?'ZAR':/\bGHS\b/.test(x)?'GHS':/\bKES\b/.test(x)?'KES':/\bAED\b/.test(x)?'AED':/₦|\bNGN\b|\bN\s?\d/.test(x)?'NGN':'NGN'}
+function countryIn(t){const z=String(t||'').toLowerCase();return COUNTRIES.find(c=>z.includes(c.toLowerCase()))||'Nigeria'}
+function currencyIn(t){const x=String(t||'').toUpperCase();return /\$|\bUSD\b/.test(x)?'USD':/£|\bGBP\b/.test(x)?'GBP':/€|\bEUR\b/.test(x)?'EUR':/\bZAR\b/.test(x)?'ZAR':/\bGHS\b/.test(x)?'GHS':/\bKES\b/.test(x)?'KES':/\bAED\b/.test(x)?'AED':/\bINR\b|₹/.test(x)?'INR':/\bCNY\b|¥/.test(x)?'CNY':/\bJPY\b/.test(x)?'JPY':/\bCAD\b/.test(x)?'CAD':/\bAUD\b/.test(x)?'AUD':/₦|\bNGN\b|\bN\s?\d/.test(x)?'NGN':'NGN'}
 function pReq(b){
  const t=b.replace(/https?:\/\/\S+/g,' ').toLowerCase(),ph=((b.match(PH)||[''])[0]).replace(/[\s-]/g,''),bud=amtOf(b);
  const rent=/\b(rent|rental|to let|lease|tenant|per annum|per year|yearly|monthly|per month)\b/.test(t),buy=/\b(buy|purchase|for sale|selling|sell|invest)/.test(t);
@@ -202,13 +204,12 @@ function sc(l,r){
  const ann=l.type=='Rent'&&l.per=='month'?l.price*12:l.price;
  let p=0,w=0;const why=[];
  const A=(wt,ok,msg)=>{w+=wt;if(ok)p+=wt;why.push((ok?'✓ ':'✗ ')+msg)};
- const ll=(l.loc||'').toLowerCase(),lp=ll.split(/\s*,\s*/).filter(Boolean),ar=(r.loc||'').toLowerCase().split(/\s*,\s*/).filter(Boolean);
- if(ar.length){const ok=ar.some(a=>ll.includes(a)||lp.some(x=>a.includes(x)));A(35,ok,ok?'Area matches':'Different area')}
+ if(r.country&&l.country&&r.country.toLowerCase()!==l.country.toLowerCase())A(35,false,'Different country');
+ else {const ll=(l.loc||'').toLowerCase(),lp=ll.split(/\s*,\s*/).filter(Boolean),ar=(r.loc||'').toLowerCase().split(/\s*,\s*/).filter(Boolean);if(ar.length){const ok=ar.some(a=>ll.includes(a)||lp.some(x=>a.includes(x)));A(35,ok,ok?'Area matches':'Different area')}}
  const rk=kindOf(r.kind)||String(r.kind||'').toLowerCase(),lk=kindOf((l.kind||'')+' '+l.title);
  if(rk&&lk)A(25,lk==rk,lk==rk?'Same property type':'Type differs ('+lk+')');
  if(r.beds&&+l.beds)A(15,+l.beds>=r.beds,+l.beds>=r.beds?l.beds+' beds meets the need':'Only '+l.beds+' beds');
- if(r.budget){const ok=ann<=r.budget,near=!ok&&(ann-r.budget)/r.budget<=.1;
-  A(20,ok,ok?'Within budget':near?'Up to 10% over budget (negotiable)':'Over budget by '+N(ann-r.budget));if(near)p+=10}
+ if(r.budget){if((r.currency||'NGN')!==(l.currency||'NGN'))why.push('Currency differs; budget was not compared');else{const ok=ann<=r.budget,near=!ok&&(ann-r.budget)/r.budget<=.1;A(20,ok,ok?'Within budget':near?'Up to 10% over budget (negotiable)':'Over budget by '+N(ann-r.budget,l.currency||'NGN'));if(near)p+=10}}
  if(!w)return null;
  return {s:Math.min(100,Math.round(p/w*100*Math.min(1,w/55))),why}}
 const allM=()=>{const o=[];S.reqs.forEach(r=>S.listings.forEach(l=>{const x=sc(l,r);if(x&&x.s>=mMin)o.push({l,r,s:x.s,why:x.why})}));return o.sort((a,b)=>b.s-a.s)};
