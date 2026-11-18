@@ -550,7 +550,7 @@ function cancelListingEdit(){edit=null;photo='';mediaFiles=[];render()}
 function parseListingPrompt(){
  const raw=$('listingPrompt').value.trim();if(raw.length<12){alert('Enter a fuller property description first.');return}
  const d=pLst(raw),bits=extractPropertyBits(raw);
- $('t').value=d.title;$('ty').value=d.tx;$('k').value=d.kind||'';$('lo').value=d.loc||'';$('co').value=d.country||'Nigeria';$('cu').value=d.currency||'NGN';$('pr').value=d.price||'';$('pe').value=d.per||'year';$('bd').value=bits.beds||'';$('ba').value=bits.baths||'';$('to').value=bits.toilets||'';$('pk').value=bits.parking||'';$('sz').value=bits.propertySize||'';$('fur').value=bits.furnishing||'';$('de').value=raw;
+ $('t').value=d.title;$('ty').value=d.tx;$('k').value=d.kind||'';$('lo').value=d.loc||'';$('co').value=d.country||'Nigeria';$('cu').value=d.currency||'NGN';$('pr').value=d.price||'';$('pe').value=d.per||'year';$('bd').value=bits.beds||'';$('ba').value=bits.baths||'';$('to').value=bits.toilets||'';$('pk').value=bits.parking||'';$('sz').value=bits.propertySize||'';$('lsz').value=bits.landSize||'';$('fur').value=bits.furnishing||'';$('de').value=raw;
  if(!d.price)alert('Details extracted. Enter the price manually because it was not detected.');$('t').focus();
 }
 async function saveL(){
@@ -577,13 +577,13 @@ function mSave(){
   if(kind==='review'){review++;remaining.push(d);return}
   if(kind==='request'){
    const dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===raw);if(dup)return;
-   S.reqs.unshift({id:uid(),name:d.name||'',phone:d.phone||'',tx:d.tx||'Sale',loc:d.loc||'',country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind||'',beds:+d.beds||0,baths:+d.baths||0,propertySize:+d.propertySize||0,parking:+d.parking||0,furnishing:d.furnishing||'',features:d.features||'',titleDoc:d.titleDoc||'',budget:+d.budget||0,url:d.postUrl||d.url||'',postUrl:d.postUrl||d.url||'',profileUrl:d.profileUrl||'',poster:d.poster||d.name||'',group:d.group||'',postedAt:d.postedAt||'',importedAt:d.importedAt||now,src:d.src||'Other',raw,at:now});reqs++;
+   S.reqs.unshift({id:uid(),name:d.name||'',phone:d.phone||'',tx:d.tx||'Sale',loc:d.loc||'',country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind||'',beds:+d.beds||0,baths:+d.baths||0,propertySize:+d.propertySize||0,landSize:+d.landSize||0,parking:+d.parking||0,furnishing:d.furnishing||'',features:d.features||'',titleDoc:d.titleDoc||'',budget:+d.budget||0,url:d.postUrl||d.url||'',postUrl:d.postUrl||d.url||'',profileUrl:d.profileUrl||'',poster:d.poster||d.name||'',group:d.group||'',postedAt:d.postedAt||'',importedAt:d.importedAt||now,src:d.src||'Other',raw,at:now});reqs++;
   }else if(!d.price||!d.title){sk++;remaining.push(d)}
   else{
    const id=uid();S.listings.unshift({id,photo:'',photoKey:'',media:[],title:d.title,type:d.tx||'Sale',kind:d.kind||'',loc:d.loc||'',country:d.country||'Nigeria',currency:d.currency||'NGN',price:+d.price,per:d.per||'year',beds:+d.beds||0,baths:+d.baths||0,toilets:+d.toilets||0,parking:+d.parking||0,propertySize:+d.propertySize||0,landSize:+d.landSize||0,furnishing:d.furnishing||'',condition:d.condition||'',titleDoc:d.titleDoc||'',features:d.features||'',status:'Available',desc:raw,originalPrompt:raw,src:d.src||'Other',source:d.src||'Other',group:d.group||'',poster:d.poster||'',phone:d.phone||'',profileUrl:d.profileUrl||'',postUrl:d.postUrl||'',postedAt:d.postedAt||'',importedAt:d.importedAt||now,raw,createdAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString(),publishStatus:'Draft'});lsts++;
   }
  });
- const unchecked=mDraft.filter(d=>!d.ok);mDraft=remaining.concat(unchecked);markInb(mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId));save();
+ const processedInbox=mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId);const unchecked=mDraft.filter(d=>!d.ok);mDraft=remaining.concat(unchecked);markInb(processedInbox);save();
  if(mDraft.length)render();else{mDraft=null;mMode='';render()}
  const notes=[];if(reqs)notes.push(reqs+' request(s) saved');if(lsts)notes.push(lsts+' listing(s) saved');if(review)notes.push(review+' item(s) need classification');if(sk)notes.push(sk+' listing(s) need a title and price');if(notes.length)alert(notes.join('. ')+'.');
 }
@@ -631,16 +631,16 @@ function conditionOf(t){
  if(/fair condition/.test(z))return 'Fair';
  return '';
 }
-function extractPropertyBits(t){return {beds:bedsOf(t),baths:bathsOf(t),toilets:toiletsOf(t),parking:parkingOf(t),propertySize:sqmOf(t),furnishing:furnishOf(t),features:featuresOf(t),titleDoc:docOf(t),condition:conditionOf(t)}}
+function extractPropertyBits(t){const sqm=sqmOf(t),lm=String(t||'').match(/(?:land|plot)[^\\n.]{0,35}?([\\d,.]+)\\s*(?:sqm|sq\\.?\\s*m|square\\s*met(?:er|re)s?)/i);return {beds:bedsOf(t),baths:bathsOf(t),toilets:toiletsOf(t),parking:parkingOf(t),propertySize:lm?0:sqm,landSize:lm?+lm[1].replace(/,/g,''):0,furnishing:furnishOf(t),features:featuresOf(t),titleDoc:docOf(t),condition:conditionOf(t)}}
 function pLst(b){
  const t=String(b||'').toLowerCase(),rent=/\b(for rent|to let|to rent|rental|per annum|per year|yearly|per month|monthly)\b/.test(t),bits=extractPropertyBits(b),k=kindOf(t),tx=rent?'Rent':'Sale';
- return {title:(bits.beds?bits.beds+'-bedroom ':'')+(k||'property')+(rent?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:k,beds:bits.beds,baths:bits.baths,toilets:bits.toilets,parking:bits.parking,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year',propertySize:bits.propertySize,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,furnishing:bits.furnishing};
+ return {title:(bits.beds?bits.beds+'-bedroom ':'')+(k||'property')+(rent?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:k,beds:bits.beds,baths:bits.baths,toilets:bits.toilets,parking:bits.parking,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year',propertySize:bits.propertySize,landSize:bits.landSize,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,furnishing:bits.furnishing};
 }
 function pReq(b){
  const raw=String(b||''),t=raw.replace(/https?:\/\/\S+/g,' ').toLowerCase(),ph=((raw.match(PH)||[''])[0]).replace(/[\s-]/g,''),bud=amtOf(raw),rent=/\b(rent|rental|to let|lease|tenant|per annum|per year|yearly|monthly|per month)\b/.test(t),buy=/\b(buy|purchase|for sale|selling|sell|invest)\b/.test(t),tx=rent&&!buy?'Rent':buy?'Sale':(bud&&bud<8e6?'Rent':'Sale'),bits=extractPropertyBits(t);
  const um=raw.match(/https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\S*/i);let nm=((raw.match(/^\[?[\d\/,.: APMapm-]*\]?\s*-?\s*([A-Z][A-Za-z.' -]{1,28}):\s/)||[])[1]||'').trim();if(/^(budget|location|price|phone|contact|looking|need|wanted)/i.test(nm))nm='';
  let budget=bud;if(tx==='Rent'&&/\b(monthly|per month|a month|\/month)\b/.test(t))budget*=12;
- return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(raw),kind:kindOf(t),beds:bits.beds,baths:bits.baths,toilets:bits.toilets,propertySize:bits.propertySize,parking:bits.parking,furnishing:bits.furnishing,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,budget,raw};
+ return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(raw),kind:kindOf(t),beds:bits.beds,baths:bits.baths,toilets:bits.toilets,propertySize:bits.propertySize,landSize:bits.landSize,parking:bits.parking,furnishing:bits.furnishing,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,budget,raw};
 }
 function sc(l,r){
  if(!l||!r||l.type!==r.tx||l.status!=='Available')return null;
