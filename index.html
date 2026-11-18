@@ -755,32 +755,32 @@ function mCard(m){
 
 /* ===== Transaction-specific matching: sale/buy and rent/to-let ===== */
 function transactionType(value,fallback){
- const t=String(value||'').toLowerCase().replace(/[_-]+/g,' ').replace(/\\s+/g,' ').trim();
- const rent=/\\b(for rent|to rent|to let|for letting|rent(?:al)?|lease|tenant|let out|letting)\\b/.test(t);
- const sale=/\\b(for sale|sale|to buy|for buying|buy|purchase|selling|sell|buyer)\\b/.test(t);
+ const t=String(value||'').toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+ const rent=/\b(for rent|to rent|to let|for letting|rent(?:al)?|lease|tenant|let out|letting)\b/.test(t);
+ const sale=/\b(for sale|sale|to buy|for buying|buy|purchase|selling|sell|buyer)\b/.test(t);
  if(rent&&!sale)return 'Rent';
  if(sale&&!rent)return 'Sale';
- if(rent&&sale)return /\\b(for rent|to rent|to let|letting)\\b/.test(t)?'Rent':'Sale';
+ if(rent&&sale)return /\b(for rent|to rent|to let|letting)\b/.test(t)?'Rent':'Sale';
  const f=String(fallback||'').toLowerCase();
  if(['rent','to let','for rent','to rent','letting'].includes(f))return 'Rent';
  if(['sale','for sale','to buy','buy','purchase'].includes(f))return 'Sale';
  return '';
 }
 function pReq(b){
- const t=String(b||'').replace(/https?:\\/\\/\\S+/g,' ').toLowerCase();
- const ph=((String(b||'').match(PH)||[''])[0]).replace(/[\\s-]/g,'');
+ const t=String(b||'').replace(/https?:\/\/\S+/g,' ').toLowerCase();
+ const ph=((String(b||'').match(PH)||[''])[0]).replace(/[\s-]/g,'');
  const bud=amtOf(String(b||''));
  const tx=transactionType(t,bud&&bud<8e6?'Rent':'Sale');
- let budget=bud;if(tx==='Rent'&&/\\b(monthly|per month|a month|\\/month)\\b/.test(t))budget*=12;
- const um=String(b||'').match(/https?:\\/\\/(?:www\\.|m\\.|web\\.)?(?:facebook\\.com|fb\\.com|fb\\.watch)\\S*/i);
- let nm=((String(b||'').match(/^\\[?[\\d\\/,.: APMapm-]*\\]?\\s*-?\\s*([A-Z][A-Za-z.' -]{1,28}):\\s/)||[])[1]||'').trim();
+ let budget=bud;if(tx==='Rent'&&/\b(monthly|per month|a month|\/month)\b/.test(t))budget*=12;
+ const um=String(b||'').match(/https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\S*/i);
+ let nm=((String(b||'').match(/^\[?[\d\/,.: APMapm-]*\]?\s*-?\s*([A-Z][A-Za-z.' -]{1,28}):\s/)||[])[1]||'').trim();
  if(/^(budget|location|price|phone|contact|looking|need|wanted)/i.test(nm))nm='';
  return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(String(b||'')),kind:kindOf(t),beds:bedsOf(t),budget,raw:String(b||'')};
 }
 function pLst(b){
  const t=String(b||'').toLowerCase(),tx=transactionType(t,'Sale');
  const x=bedsOf(t),k=kindOf(t);
- return {title:(x?x+'-bedroom ':'')+(k||'property')+(tx==='Rent'?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(String(b||'')),kind:k,beds:x,price:amtOf(String(b||'')),per:/per month|monthly|\\/month/.test(t)?'month':'year'};
+ return {title:(x?x+'-bedroom ':'')+(k||'property')+(tx==='Rent'?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(String(b||'')),kind:k,beds:x,price:amtOf(String(b||'')),per:/per month|monthly|\/month/.test(t)?'month':'year'};
 }
 function sc(l,r){
  if(!l||!r||l.status!=='Available')return null;
@@ -789,7 +789,7 @@ function sc(l,r){
  if(!listingTx||!requestTx||listingTx!==requestTx)return null;
  const why=[];let score=0;
  const add=(weight,match,label)=>{const v=Math.max(0,Math.min(1,Number(match)||0));score+=weight*v;why.push((v>=.85?'✓ ':v>=.5?'~ ':'✗ ')+label);};
- const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\\s+/g,' ').trim();
+ const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
  const locParts=norm(r.loc).split(/[ ,/]+/).filter(x=>x.length>2);
  const listingLoc=norm((l.loc||'')+' '+(l.address||''));
  if(locParts.length){const hits=locParts.filter(x=>listingLoc.includes(x));add(22.5,hits.length?Math.min(1,hits.length/Math.min(2,locParts.length)):0,hits.length?'Preferred location: '+hits.join(', '):'Preferred location not matched');}
