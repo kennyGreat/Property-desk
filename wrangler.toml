@@ -1,0 +1,8 @@
+name = "vortexedge-property-desk-api"
+main = "worker.js"
+compatibility_date = "2026-11-18"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vortexedge-property-desk"
+database_id = "4a1a489f-4a83-4e92-b114-fdfd8f08358f"
