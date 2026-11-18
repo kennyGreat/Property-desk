@@ -39,6 +39,9 @@ details{border:1px solid var(--bd);border-radius:12px;padding:12px 14px;margin-t
 </div>
 <div id="pa"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.9.0/mammoth.browser.min.js"></script>
 <script>
 const K='propdesk_v1';
 let S={listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,rent:10},chk:{},groups:[],reqs:[]};
@@ -236,8 +239,38 @@ function vM(){
  (ms.length?ms.map(mCard).join(''):'<p class="mu">No matches yet. Import client requests and make sure your listings are Available. Scores compare area, property type, bedrooms and budget, using only what the request states.</p>')+
  (S.reqs.length?'<h2>Requests</h2>'+S.reqs.map(mReq).join(''):'')}
 function impUI(){const q=mMode=='req',mixed=mMode=='mixed';
- return '<div class="c"><h2 style="margin-top:0">'+(mixed?'Import mixed property messages':q?'Import requests':'Import listings')+'</h2><p class="mu">'+(mixed?'Paste a mixture of property advertisements and client requirements. Property Desk will sort each message into Listings, Requests or Needs Review.':'Paste one or many '+(q?'client messages (WhatsApp, Facebook, SMS)':'property descriptions'))+'. Separate individual entries with a blank line, or upload a .txt or .csv file. Review the extracted details before saving.</p><textarea id="mt" rows="8" placeholder="Paste several messages here, with a blank line between each one..."></textarea><div class="r">'+(q||mixed?'<select id="ms" style="width:auto">'+SRC.map(s=>'<option>'+s+'</option>').join('')+'</select>':'')+'<input type="file" accept=".txt,.csv,text/plain" style="width:auto" onchange="mFile(this)"><button class="p" onclick="mParse()">Analyse and sort</button><button onclick="mMode=\'\';mDraft=null;render()">Close</button></div>'+(mDraft?draftUI():'')+'</div>'}
-function mFile(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('mt').value=/\.csv$/i.test(f.name)?r.result.split(/\r?\n/).join('\n\n'):r.result};r.readAsText(f)}
+ return '<div class="c"><h2 style="margin-top:0">'+(mixed?'Import mixed property messages':q?'Import client requests':'Import property listings')+'</h2><p class="mu">'+(mixed?'Paste a mixture of property advertisements and client requirements. Property Desk will sort each message into Listings, Requests or Needs Review.':'Paste one or many '+(q?'client messages (WhatsApp, Facebook, SMS)':'property descriptions'))+'. Paste text directly or upload TXT, CSV, PDF or Word (.docx) documents. You can select multiple files. The extracted text will be analysed and reviewed before saving.</p><textarea id="mt" rows="8" placeholder="Paste several messages here, with a blank line between each one..."></textarea><div class="r">'+(q||mixed?'<select id="ms" style="width:auto">'+SRC.map(s=>'<option>'+s+'</option>').join('')+'</select>':'')+'<input type="file" accept=".txt,.csv,.pdf,.docx,.doc,text/plain,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword" multiple style="width:auto" onchange="mFile(this)"><button class="p" onclick="mParse()">Analyse and sort</button><button onclick="mMode=\'\';mDraft=null;render()">Close</button></div><p class="fieldhint">Supported: TXT, CSV, PDF and DOCX. Legacy DOC files must be saved as DOCX first. You can also paste WhatsApp or Facebook text directly.</p>'+(mDraft?draftUI():'')+'</div>'}
+async function mFile(i){
+ const files=Array.from(i.files||[]);if(!files.length)return;
+ const out=[];
+ const readBuffer=file=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read '+file.name));r.readAsArrayBuffer(file)});
+ const readText=file=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('Could not read '+file.name));r.readAsText(file)});
+ for(const f of files){
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  try{
+   let text='';
+   if(ext==='txt'||ext==='csv')text=await readText(f);
+   else if(ext==='pdf'){
+    if(!window.pdfjsLib)throw new Error('PDF reader is still loading. Refresh and try again.');
+    const data=new Uint8Array(await readBuffer(f));
+    const pdf=await window.pdfjsLib.getDocument({data}).promise;
+    const pages=[];
+    for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),content=await page.getTextContent();pages.push(content.items.map(x=>x.str).join(' '));}
+    text=pages.join('\n\n');
+   }else if(ext==='docx'){
+    if(!window.mammoth)throw new Error('Word reader is still loading. Refresh and try again.');
+    const result=await window.mammoth.extractRawText({arrayBuffer:await readBuffer(f)});
+    text=result.value||'';
+   }else if(ext==='doc')throw new Error('Legacy .doc is not supported in-browser. Open it in Microsoft Word and save as .docx, then upload again.');
+   else throw new Error('Unsupported file type.');
+   if(!text.trim())throw new Error('No selectable text found. Scanned PDFs need OCR or the text can be pasted manually.');
+   out.push('--- '+f.name+' ---\n'+text.trim());
+  }catch(e){out.push('--- '+f.name+' NOT IMPORTED: '+e.message+' ---');}
+ }
+ const existing=$('mt').value.trim();
+ $('mt').value=(existing?existing+'\n\n':'')+out.join('\n\n');
+ i.value='';
+}
 function classifyMixed(b){
  const t=String(b||'').toLowerCase();
  const rq=[/looking for|in search of|searching for|seeking|need(?:s)? (?:a |an |one |to rent|to buy)?|client (?:is )?looking|buyer wants|tenant wants|wanted to rent|wanted to buy|requirements?|budget of|my budget|please get me|help me find|urgently (?:need|want)/,/ to rent| for rent| to buy| to purchase/];
