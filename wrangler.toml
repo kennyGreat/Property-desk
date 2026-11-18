@@ -6,3 +6,7 @@ compatibility_date = "2026-11-18"
 binding = "DB"
 database_name = "vortexedge-property-desk"
 database_id = "4a1a489f-4a83-4e92-b114-fdfd8f08358f"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "vortexedge-property-media"
