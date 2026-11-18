@@ -306,7 +306,7 @@ function draftUI(){
 function mSave(){
  let sk=0,review=0,reqs=0,lsts=0;const remaining=[];
  mDraft.filter(d=>d.ok).forEach(d=>{
-  const kind=mMode=='req'?'request':mMode=='lst'?'listing':d.classification;
+  const raw=String(d.raw||'').trim();const kind=mMode=='req'?'request':mMode=='lst'?'listing':d.classification;
   if(kind=='review'){review++;remaining.push(d);return}
   if(kind=='request'){
    const dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===String(d.raw||'').trim());if(dup)return;S.reqs.unshift({id:uid(),name:d.name,phone:d.phone,tx:d.tx,loc:d.loc,country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind,beds:d.beds,budget:d.budget,url:d.postUrl||d.url||'',postUrl:d.postUrl||d.url||'',profileUrl:d.profileUrl||'',poster:d.poster||d.name||'',group:d.group||'',postedAt:d.postedAt||'',importedAt:d.importedAt||Date.now(),src:d.src,raw:d.raw,at:Date.now()});reqs++;
@@ -576,7 +576,7 @@ function mSave(){
   const kind=mMode==='req'?'request':mMode==='lst'?'listing':d.classification;
   if(kind==='review'){review++;remaining.push(d);return}
   if(kind==='request'){
-   const raw=String(d.raw||'').trim(),dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===raw);if(dup)return;
+   const dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===raw);if(dup)return;
    S.reqs.unshift({id:uid(),name:d.name||'',phone:d.phone||'',tx:d.tx||'Sale',loc:d.loc||'',country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind||'',beds:+d.beds||0,baths:+d.baths||0,propertySize:+d.propertySize||0,parking:+d.parking||0,furnishing:d.furnishing||'',features:d.features||'',titleDoc:d.titleDoc||'',budget:+d.budget||0,url:d.postUrl||d.url||'',postUrl:d.postUrl||d.url||'',profileUrl:d.profileUrl||'',poster:d.poster||d.name||'',group:d.group||'',postedAt:d.postedAt||'',importedAt:d.importedAt||now,src:d.src||'Other',raw,at:now});reqs++;
   }else if(!d.price||!d.title){sk++;remaining.push(d)}
   else{
@@ -665,6 +665,14 @@ function sc(l,r){
  const stop=new Set(['looking','property','need','want','rent','sale','buy','for','with','around','near','please','client','budget','house','apartment','from','that','this','have','has','the','and','you','any','area','must','should']);
  const need=norm((r.features||'')+' '+(r.raw||'')),have=norm((l.features||'')+' '+(l.desc||''));const tokens=[...new Set(need.split(' ').filter(x=>x.length>3&&!stop.has(x)))].filter(x=>have.includes(x));if(tokens.length)add(7,Math.min(1,tokens.length/3),'Feature overlap: '+tokens.slice(0,4).join(', '));
  if(!total)return null;return {s:Math.round(earned/total*100*Math.min(1,total/55)),why};
+}
+
+
+function parseListingPrompt(){
+ const raw=$('listingPrompt').value.trim();if(raw.length<12){alert('Enter a fuller property description first.');return}
+ const d=pLst(raw),bits=extractPropertyBits(raw);
+ $('t').value=d.title;$('ty').value=d.tx;$('k').value=d.kind||'';$('lo').value=d.loc||'';$('co').value=d.country||'Nigeria';$('cu').value=d.currency||'NGN';$('pr').value=d.price||'';$('pe').value=d.per||'year';$('bd').value=bits.beds||'';$('ba').value=bits.baths||'';$('to').value=bits.toilets||'';$('pk').value=bits.parking||'';$('sz').value=bits.propertySize||'';$('fur').value=bits.furnishing||'';$('cond').value=bits.condition||'';$('doc').value=bits.titleDoc||'';$('features').value=bits.features||'';$('de').value=raw;
+ if(!d.price)alert('Details extracted. Enter the price manually because it was not detected.');$('t').focus();
 }
 
 /* ===== App startup ===== */
