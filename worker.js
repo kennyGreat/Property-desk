@@ -86,10 +86,12 @@ export default {
       if (!env.MEDIA) return reply({ error: "R2 bucket binding MEDIA is missing" }, 503);
       const type = request.headers.get("Content-Type") || "application/octet-stream";
       if (!contentTypeAllowed(type)) return reply({ error: "Unsupported file type. Upload images, supported videos or PDF documents." }, 415);
-      const length = Number(request.headers.get("Content-Length") || 0);
-      // Conservative cap for the first free-plan upload path. Large video multipart support is a later phase.
-      if (length > 90 * 1024 * 1024) return reply({ error: "This upload path supports files up to 90 MB. Use the large-file multipart upload workflow for bigger videos." }, 413);
-      if (!request.body) return reply({ error: "Upload body is empty" }, 400);
+      const rawLength = request.headers.get("Content-Length");
+      if (!rawLength || !/^\\d+$/.test(rawLength)) return reply({ error: "A known Content-Length is required for this upload." }, 411);
+      const length = Number(rawLength);
+      // Single-request upload path is capped; larger videos need multipart uploads.
+      if (length > 90 * 1024 * 1024) return reply({ error: "This upload path supports files up to 90 MB. Large videos require multipart upload." }, 413);
+      if (!request.body || length === 0) return reply({ error: "Upload body is empty" }, 400);
       const listingId = safeName(url.searchParams.get("listingId") || "unassigned");
       const filename = safeName(url.searchParams.get("name") || "upload");
       const key = `properties/${listingId}/${crypto.randomUUID()}-${filename}`;
@@ -105,14 +107,25 @@ export default {
       const key = decodeURIComponent(url.pathname.slice("/media/".length));
       if (!key || key.includes("..") || key.startsWith("/")) return reply({ error: "Invalid media key" }, 400);
       if (request.method === "GET") {
-        const object = await env.MEDIA.get(key);
+        const rangeHeader = request.headers.get("Range");
+        const object = await env.MEDIA.get(key, rangeHeader ? { range: request.headers } : undefined);
         if (!object) return reply({ error: "Media not found" }, 404);
         const headers = new Headers(cors);
         object.writeHttpMetadata(headers);
         headers.set("Cache-Control", "private, no-store");
         headers.set("ETag", object.httpEtag);
         headers.set("Accept-Ranges", "bytes");
-        return new Response(object.body, { headers });
+        let status = 200;
+        if (rangeHeader && object.range) {
+          const offset = object.range.offset;
+          const length = object.range.length;
+          headers.set("Content-Range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
+          headers.set("Content-Length", String(length));
+          status = 206;
+        } else {
+          headers.set("Content-Length", String(object.size));
+        }
+        return new Response(object.body, { status, headers });
       }
       if (request.method === "DELETE") {
         await env.MEDIA.delete(key);
