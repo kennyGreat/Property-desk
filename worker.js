@@ -49,14 +49,19 @@ export default {
     const next = actual + 1;
     const now = new Date().toISOString();
     if (current) {
-      await env.DB.prepare("UPDATE app_state SET payload = ?, revision = ?, updated_at = ? WHERE id = 1 AND revision = ?")
+      const result = await env.DB.prepare("UPDATE app_state SET payload = ?, revision = ?, updated_at = ? WHERE id = 1 AND revision = ?")
         .bind(payload, next, now, actual).run();
+      if (!result.meta || result.meta.changes !== 1) {
+        return reply({ error: "Concurrent update detected. Reload cloud data before retrying." }, 409);
+      }
     } else {
-      await env.DB.prepare("INSERT INTO app_state (id, payload, revision, updated_at) VALUES (1, ?, ?, ?)")
-        .bind(payload, next, now).run();
+      try {
+        await env.DB.prepare("INSERT INTO app_state (id, payload, revision, updated_at) VALUES (1, ?, ?, ?)")
+          .bind(payload, next, now).run();
+      } catch {
+        return reply({ error: "Another device initialized the cloud state. Download it before saving.", revision: 1 }, 409);
+      }
     }
-    const verified = await env.DB.prepare("SELECT revision FROM app_state WHERE id = 1").first();
-    if (!verified || verified.revision !== next) return reply({ error: "Concurrent update detected. Reload cloud data before retrying." }, 409);
     return reply({ ok: true, revision: next, updatedAt: now });
   }
 };
