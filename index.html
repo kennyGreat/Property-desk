@@ -611,6 +611,62 @@ function vKit(){
  try{new QRCode($('qr'),{text:'https://wa.me/'+wa(S.set.phone)+'?text='+encodeURIComponent('Hi, I am interested in: '+l.title),width:160,height:160})}catch(e){$('qr').textContent='QR code could not load.'}
 }
 
+
+// Expand extraction and matching to include legal title, land size, toilets and amenities.
+function featuresOf(t){
+ const z=String(t||'').toLowerCase(),known=['swimming pool','gym','bq','boys quarters','generator','borehole','security','fitted kitchen','elevator','lift','garden','solar','inverter','air conditioning','balcony','terrace','gated estate','24-hour power','waterfront','serviced','ensuite','en-suite'];
+ return known.filter(x=>z.includes(x)).join(', ');
+}
+function docOf(t){
+ const z=String(t||'').toLowerCase();
+ for(const x of ['certificate of occupancy','c of o','right of occupancy','r of o','deed of assignment','governor consent','gazette','excision','freehold','leasehold'])if(z.includes(x))return x;
+ return '';
+}
+function conditionOf(t){
+ const z=String(t||'').toLowerCase();
+ if(/newly built|brand new/.test(z))return 'Newly built';
+ if(/needs? renovation|renovation required|fixer upper/.test(z))return 'Needs renovation';
+ if(/excellent condition/.test(z))return 'Excellent';
+ if(/good condition/.test(z))return 'Good';
+ if(/fair condition/.test(z))return 'Fair';
+ return '';
+}
+function extractPropertyBits(t){return {beds:bedsOf(t),baths:bathsOf(t),toilets:toiletsOf(t),parking:parkingOf(t),propertySize:sqmOf(t),furnishing:furnishOf(t),features:featuresOf(t),titleDoc:docOf(t),condition:conditionOf(t)}}
+function pLst(b){
+ const t=String(b||'').toLowerCase(),rent=/\b(for rent|to let|to rent|rental|per annum|per year|yearly|per month|monthly)\b/.test(t),bits=extractPropertyBits(b),k=kindOf(t),tx=rent?'Rent':'Sale';
+ return {title:(bits.beds?bits.beds+'-bedroom ':'')+(k||'property')+(rent?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:k,beds:bits.beds,baths:bits.baths,toilets:bits.toilets,parking:bits.parking,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year',propertySize:bits.propertySize,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,furnishing:bits.furnishing};
+}
+function pReq(b){
+ const raw=String(b||''),t=raw.replace(/https?:\/\/\S+/g,' ').toLowerCase(),ph=((raw.match(PH)||[''])[0]).replace(/[\s-]/g,''),bud=amtOf(raw),rent=/\b(rent|rental|to let|lease|tenant|per annum|per year|yearly|monthly|per month)\b/.test(t),buy=/\b(buy|purchase|for sale|selling|sell|invest)\b/.test(t),tx=rent&&!buy?'Rent':buy?'Sale':(bud&&bud<8e6?'Rent':'Sale'),bits=extractPropertyBits(t);
+ const um=raw.match(/https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\S*/i);let nm=((raw.match(/^\[?[\d\/,.: APMapm-]*\]?\s*-?\s*([A-Z][A-Za-z.' -]{1,28}):\s/)||[])[1]||'').trim();if(/^(budget|location|price|phone|contact|looking|need|wanted)/i.test(nm))nm='';
+ let budget=bud;if(tx==='Rent'&&/\b(monthly|per month|a month|\/month)\b/.test(t))budget*=12;
+ return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(raw),kind:kindOf(t),beds:bits.beds,baths:bits.baths,toilets:bits.toilets,propertySize:bits.propertySize,parking:bits.parking,furnishing:bits.furnishing,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,budget,raw};
+}
+function sc(l,r){
+ if(!l||!r||l.type!==r.tx||l.status!=='Available')return null;
+ if(l.country&&r.country&&l.country.toLowerCase()!==r.country.toLowerCase())return null;
+ const why=[];let earned=0,total=0;
+ const add=(weight,score,label)=>{total+=weight;earned+=weight*score;why.push((score>=.75?'✓ ':score>0?'~ ':'✗ ')+label)};
+ const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+ const locA=norm(l.loc+' '+l.address),locB=norm(r.loc);
+ if(locB){const parts=locB.split(/[ ,]+/).filter(x=>x.length>2);const hit=parts.filter(x=>locA.includes(x)).length;add(28,hit?Math.min(1,hit/Math.min(2,parts.length)):0,hit?'Location overlap':'Area differs')}
+ const lk=norm((l.kind||'')+' '+(l.title||'')),rk=norm(r.kind);
+ if(rk&&lk){const same=lk.includes(rk)||rk.includes(lk)||(kindOf(lk)&&kindOf(lk)===kindOf(rk));add(15,same?1:0,same?'Property type fits':'Property type differs')}
+ if(+r.beds>0&&+l.beds>0)add(8,+l.beds>=+r.beds?1:0,+l.beds+' bedrooms vs '+r.beds+' required');
+ if(+r.baths>0&&+l.baths>0)add(5,+l.baths>=+r.baths?1:0,+l.baths+' bathrooms vs '+r.baths+' required');
+ if(+r.toilets>0&&+l.toilets>0)add(3,+l.toilets>=+r.toilets?1:0,'Toilets compared');
+ if(+r.budget>0&&+l.price>0){const priceYear=l.type==='Rent'&&l.per==='month'?l.price*12:l.price,budgetYear=r.budget; if((r.currency||'NGN')===(l.currency||'NGN')){const ratio=priceYear/budgetYear;add(20,ratio<=1?1:ratio<=1.1?.75:ratio<=1.2?.35:0,ratio<=1?'Within budget':Math.round((ratio-1)*100)+'% over budget')}else why.push('Currency differs; budget not compared')}
+ if(+r.propertySize>0&&+l.propertySize>0)add(5,+l.propertySize>=+r.propertySize?1:Math.max(0,+l.propertySize/+r.propertySize),'Building size compared');
+ if(+r.landSize>0&&+l.landSize>0)add(6,+l.landSize>=+r.landSize?1:Math.max(0,+l.landSize/+r.landSize),'Land size compared');
+ if(+r.parking>0&&+l.parking>0)add(3,+l.parking>=+r.parking?1:0,'Parking spaces compared');
+ if(r.furnishing&&l.furnishing)add(3,norm(r.furnishing)===norm(l.furnishing)?1:0,'Furnishing compared');
+ if(r.condition&&l.condition)add(2,norm(r.condition)===norm(l.condition)?1:0,'Condition compared');
+ if(r.titleDoc&&l.titleDoc)add(5,norm(l.titleDoc).includes(norm(r.titleDoc))?1:0,'Title document compared');
+ const stop=new Set(['looking','property','need','want','rent','sale','buy','for','with','around','near','please','client','budget','house','apartment','from','that','this','have','has','the','and','you','any','area','must','should']);
+ const need=norm((r.features||'')+' '+(r.raw||'')),have=norm((l.features||'')+' '+(l.desc||''));const tokens=[...new Set(need.split(' ').filter(x=>x.length>3&&!stop.has(x)))].filter(x=>have.includes(x));if(tokens.length)add(7,Math.min(1,tokens.length/3),'Feature overlap: '+tokens.slice(0,4).join(', '));
+ if(!total)return null;return {s:Math.round(earned/total*100*Math.min(1,total/55)),why};
+}
+
 /* ===== App startup ===== */
 (function startPropertyDesk(){
   const boot = () => {
