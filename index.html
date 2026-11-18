@@ -573,7 +573,7 @@ async function saveL(){
 function mSave(){
  let sk=0,review=0,reqs=0,lsts=0;const remaining=[],now=Date.now();
  mDraft.filter(d=>d.ok).forEach(d=>{
-  const kind=mMode==='req'?'request':mMode==='lst'?'listing':d.classification;
+  const raw=String(d.raw||'').trim();const kind=mMode==='req'?'request':mMode==='lst'?'listing':d.classification;
   if(kind==='review'){review++;remaining.push(d);return}
   if(kind==='request'){
    const dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===raw);if(dup)return;
