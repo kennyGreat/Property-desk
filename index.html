@@ -75,7 +75,7 @@ function stats(){
 function vL(){
  if(kitId)return vKit();
  const e=edit?S.listings.find(l=>l.id==edit):{};
- $('v').innerHTML=stats()+`<div class="c"><h2 style="margin-top:0">Describe a property in plain language</h2><p class="mu">Example: 3-bedroom detached duplex for sale in Lekki Phase 1, Lagos, Nigeria. Asking price USD 450,000. 4 bathrooms, swimming pool and title documents.</p><textarea id="listingPrompt" rows="3" placeholder="Paste or type the property description..."></textarea><div class="r"><button class="p" onclick="parseListingPrompt()">Extract details into listing</button></div></div><div class="c"><h2 style="margin-top:0">${edit?'Edit listing':'Add listing'}</h2>
+ $('v').innerHTML=stats()+`<div class="c"><h2 style="margin-top:0">Describe a property in plain language</h2><p class="mu">Example: 3-bedroom detached duplex for sale in Lekki Phase 1, Lagos, Nigeria. Asking price USD 450,000. 4 bathrooms, swimming pool and title documents.</p><textarea id="listingPrompt" rows="3" placeholder="Paste or type the property description...">${esc(e.originalPrompt||'')}</textarea><div class="r"><button class="p" onclick="parseListingPrompt()">Extract details into listing</button></div></div><div class="c"><h2 style="margin-top:0">${edit?'Edit listing':'Add listing'}</h2>
  <div class="g">
  <div><label>Title</label><input id="t" value="${esc(e.title)}" placeholder="3-bedroom flat, Sabon Tasha"></div>
  <div><label>For</label><select id="ty"><option ${e.type=='Sale'?'selected':''}>Sale</option><option ${e.type=='Rent'?'selected':''}>Rent</option></select></div>
@@ -97,7 +97,7 @@ function vL(){
 function parseListingPrompt(){const raw=$('listingPrompt').value.trim();if(raw.length<12){alert('Enter a fuller property description first.');return}const d=pLst(raw);$('t').value=d.title;$('ty').value=d.tx;$('k').value=d.kind||'';$('lo').value=d.loc||'';$('co').value=d.country||'Nigeria';$('cu').value=d.currency||'NGN';$('pr').value=d.price||'';$('pe').value=d.per||'year';$('bd').value=d.beds||'';$('de').value=raw;if(!d.price)alert('Details extracted. Enter the price manually because it was not detected.');document.getElementById('de').focus()}
 function pick(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const m=900,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);photo=c.toDataURL('image/jpeg',.7)};im.src=r.result};r.readAsDataURL(f)}
 function saveL(){
- const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value,loc:$('lo').value,country:$('co').value.trim()||'Nigeria',currency:$('cu').value||'NGN',price:+$('pr').value,per:$('pe').value,beds:$('bd').value,baths:$('ba').value,status:$('sx').value,desc:$('de').value};
+ const prior=edit?S.listings.find(l=>l.id==edit):null;const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value,loc:$('lo').value,country:$('co').value.trim()||'Nigeria',currency:$('cu').value||'NGN',price:+$('pr').value,per:$('pe').value,beds:$('bd').value,baths:$('ba').value,status:$('sx').value,desc:$('de').value,originalPrompt:(($('listingPrompt')&&$('listingPrompt').value.trim())||(prior&&prior.originalPrompt)||'')};
  if(!o.title||!o.price){alert('Add a title and a price.');return}
  if(edit){const l=S.listings.find(l=>l.id==edit);Object.assign(l,o);if(photo)l.photo=photo}else S.listings.unshift(Object.assign({id:uid(),photo},o));
  edit=null;photo='';save();render()}
@@ -342,13 +342,62 @@ function fbReqs(){
  const q=S.reqs.filter(r=>r.src=='Facebook'||r.url);
  return '<div class="c"><h2 style="margin-top:0">Requests from Facebook</h2>'+(q.length?q.map(r=>`<div class="r" style="align-items:center;margin:4px 0"><span style="flex:1;min-width:150px"><b>${esc(r.name||'Prospect')}</b> <span class="mu">${esc(mReqTxt(r))}</span></span>${r.url?`<a class="btn" target="_blank" rel="noopener" href="${esc(r.url)}">Open post</a>`:''}<button onclick="tab='match';render()">Matches</button><button onclick="mLead('${r.id}','')" ${S.leads.some(x=>x.rid==r.id)?'disabled':''}>Save lead</button></div>`).join(''):'<p class="mu">No Facebook requests imported yet.</p>')+'<div class="r"><button onclick="tab=\'match\';mMode=\'req\';mDraft=null;render()">Import requests</button></div></div>'}
 
-/* ===== Local-first mode: authentication removed ===== */
-let sess=null,snap={},busy=false,dirty=false,st='Local only';
+/* ===== Cloudflare D1 sync: owner-key protected, manual and conflict-aware ===== */
+const CLOUD_API='https://vortexedge-property-desk-api.greattdeleyye.workers.dev';
+let sess=null,snap={},busy=false,dirty=false,st='Saved on this device';
+let cloudRevision=0,cloudHasState=false,cloudUpdatedAt=null;
+const ownerKey=()=>{try{return sessionStorage.getItem('pd_owner_key')||''}catch(e){return ''}};
 const setSt=m=>{st=m;['sy','sy2'].forEach(i=>{const e=document.getElementById(i);if(e)e.textContent=m})};
-const sync=async()=>{setSt('Saved on this device')};
-async function syncNow(){cache();setSt('Saved on this device');alert('Your data is saved in this browser. Use Settings → Backup to move it to another device')}
-function acctCard(){return '<div class="c"><h2 style="margin-top:0">Storage and device access</h2><p class="mu">The app opens directly without an account. Listings, requests, leads and settings are saved locally in this browser on this device. Automatic cloud sync is disabled in this no-login version.</p><div class="r"><button class="p" onclick="exp()">Export full backup</button><button onclick="$(\'imf\').click()">Import backup</button></div></div>'}
-function capCard(){return '<div class="c"><h2 style="margin-top:0">Message capture</h2><p class="mu">Automatic phone-notification capture is not active in this no-login version. The previous workflow required an authenticated Supabase account and a private capture key. You can still paste or upload messages in Match → Import requests.</p></div>'}
+async function cloudRequest(path,method='GET',body){
+ const key=ownerKey();if(!key)throw new Error('Enter your OWNER_KEY first.');
+ const res=await fetch(CLOUD_API+path,{method,headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'});
+ let data={};try{data=await res.json()}catch(e){}
+ if(!res.ok){const er=new Error(data.error||('Cloud request failed ('+res.status+')'));er.status=res.status;er.data=data;throw er}
+ return data;
+}
+function backupLocalDownload(){
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download='property-desk-before-cloud-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+async function cloudConnect(){
+ const field=$('ownerKeyInput'),key=field?field.value.trim():'';
+ if(!key){alert('Enter your private OWNER_KEY.');return}
+ try{sessionStorage.setItem('pd_owner_key',key)}catch(e){alert('This browser cannot keep the key for this session.');return}
+ setSt('Checking cloud access…');
+ try{
+  const d=await cloudRequest('/state');cloudRevision=d.revision||0;cloudHasState=!!d.state;cloudUpdatedAt=d.updatedAt||null;
+  setSt(cloudHasState?'Cloud connected · revision '+cloudRevision:'Cloud connected · empty database');
+  if(cloudHasState)alert('Connected. Cloud data exists (revision '+cloudRevision+'). Choose Pull cloud to load it here, or Upload local only if you intend to replace the cloud copy.');
+  else alert('Connected. The cloud database is empty. Your local records have not been changed. You can now back them up and upload them to the cloud.');
+  render();
+ }catch(e){if(e.status===401){try{sessionStorage.removeItem('pd_owner_key')}catch(x){}setSt('Access denied · check OWNER_KEY')}else setSt('Cloud connection failed');alert(e.message)}
+}
+async function cloudPull(){
+ if(!ownerKey()){alert('Connect with your OWNER_KEY first.');return}
+ if(!confirm('Pulling cloud data will replace the data currently shown on this device. A local backup will download first. Continue?'))return;
+ try{
+  setSt('Reading cloud data…');const d=await cloudRequest('/state');
+  if(!d.state){alert('The cloud database is empty. Nothing was changed. Use Upload local to migrate this device.');cloudRevision=d.revision||0;cloudHasState=false;setSt('Cloud is empty');return}
+  backupLocalDownload();S=Object.assign({listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,rent:10},chk:{},groups:[],reqs:[]},d.state);
+  if(!Array.isArray(S.listings))S.listings=[];if(!Array.isArray(S.leads))S.leads=[];if(!Array.isArray(S.reqs))S.reqs=[];if(!Array.isArray(S.groups))S.groups=[];
+  cache();cloudRevision=d.revision;cloudHasState=true;cloudUpdatedAt=d.updatedAt;setSt('Cloud data loaded · revision '+cloudRevision);render();
+  alert('Cloud data loaded. A backup of the previous local data was downloaded first.');
+ }catch(e){setSt('Cloud pull failed');alert(e.message)}
+}
+async function cloudUpload(){
+ if(!ownerKey()){alert('Connect with your OWNER_KEY first.');return}
+ try{
+  const latest=await cloudRequest('/state');
+  if(latest.state&&!confirm('Cloud data already exists (revision '+latest.revision+'). Uploading will replace that cloud copy with this device’s data. A backup of this device will download first. Continue only if this is intentional.'))return;
+  if(!latest.state&&!confirm('This will upload all listings, requests, leads, settings and other app data from this device to the empty cloud database. A local backup will download first. Continue?'))return;
+  backupLocalDownload();setSt('Uploading local data…');
+  const result=await cloudRequest('/state','PUT',{expectedRevision:latest.revision||0,state:S});
+  cloudRevision=result.revision;cloudHasState=true;cloudUpdatedAt=result.updatedAt;setSt('Cloud saved · revision '+cloudRevision);
+  alert('Upload successful. This device’s data is now in Cloudflare D1. Connect your other device with the same OWNER_KEY and use Pull cloud.');
+ }catch(e){setSt(e.status===409?'Cloud conflict · pull latest data':'Cloud upload failed');alert(e.status===409?'A newer cloud revision exists. Nothing was overwritten. Pull the latest cloud data before trying again.':e.message)}
+}
+async function syncNow(){cache();await cloudUpload()}
+function acctCard(){return '<div class="c"><h2 style="margin-top:0">Cloud storage and device access</h2><p class="mu">Your records are still saved locally until you explicitly upload them. Enter the private owner key to connect. The key is kept in this browser session only and is not written into the app or GitHub.</p><p class="mu"><b>API:</b> '+CLOUD_API+'</p><label>Private OWNER_KEY</label><input id="ownerKeyInput" type="password" autocomplete="off" placeholder="Paste your private key here"><div class="r"><button class="p" onclick="cloudConnect()">Connect to cloud</button><button onclick="cloudPull()">Pull cloud to this device</button><button onclick="cloudUpload()">Upload this device to cloud</button></div><p class="mu">Current status: '+esc(st)+' · Local records: '+S.listings.length+' listings, '+S.reqs.length+' requests, '+S.leads.length+' leads'+(cloudUpdatedAt?' · Cloud updated '+fmtDate(cloudUpdatedAt):'')+'</p><div class="r"><button onclick="exp()">Export full backup</button><button onclick="$(\'imf\').click()">Import backup</button></div></div>'}
+function capCard(){return '<div class="c"><h2 style="margin-top:0">Message capture</h2><p class="mu">Automatic phone-notification capture is not active. You can still paste or upload messages in Match → Import requests.</p></div>'}
 function qsync(){}
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 addEventListener('online',()=>setSt('Online · local storage active'));
