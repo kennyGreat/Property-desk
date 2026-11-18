@@ -8,7 +8,7 @@ This backend stores the complete existing Property Desk state as one JSON docume
 - `wrangler.toml`: Worker and D1 binding configuration.
 
 ## Important
-The existing app is still local-only until its frontend is connected to this API. Do not delete browser data or assume another device can see it yet. Export a backup on the device holding your current records before migration.
+The frontend is now connected to this API. It remains local-first and sync is explicit: connect with OWNER_KEY, then use Pull cloud or Upload this device in Settings. A pull replaces that device's current state after downloading a backup. Before the first migration, export a separate backup from the device holding your current records.
 
 ## Cloudflare setup
 1. In the Cloudflare D1 database `vortexedge-property-desk`, open Console and execute the contents of `schema.sql`.
@@ -27,11 +27,11 @@ The existing app is still local-only until its frontend is connected to this API
 ## Security and sync behavior
 The owner key is a shared secret, not individual user accounts. Anyone who obtains it can access the entire business dataset. Rotate it if exposed. CORS is open because the static GitHub Pages app may be served from a changing origin; authorization is enforced by the secret. For a public commercial product, replace this shared-key design with proper per-user authentication and access controls.
 
-The API uses a single canonical state row and revision checks to prevent silent last-write-wins overwrites. The frontend must implement explicit initial migration, conflict-aware merge, and a visible sync status before cloud sync is enabled.
+The API uses a single canonical state row and revision checks to prevent silent last-write-wins overwrites. The frontend provides explicit pull/upload, local backup before pull/upload, visible status and revision checks. It does not automatically merge simultaneous edits or sync in the background; avoid editing the same dataset on two devices at the same time.
 
 ## R2 media storage
 
-The app's media files are stored separately from the D1 app-state JSON in the private R2 bucket `vortexedge-property-media`.
+The app's property photos are stored separately from the D1 app-state JSON in the private R2 bucket `vortexedge-property-media`. New photos upload directly to R2 when the owner key is connected. Legacy Base64 listing photos are migrated to R2 during the next explicit cloud upload; each listing then stores `photoKey` instead of the image bytes.
 
 ### Worker binding
 
@@ -47,15 +47,15 @@ The repository's `wrangler.toml` now declares the same binding for Wrangler depl
 All media endpoints require the existing `Authorization: Bearer OWNER_KEY` header.
 
 - `POST /media?listingId=<id>&name=<filename>`: raw file body; allowed image/video/PDF MIME types; current conservative upload limit 90 MB per file.
-- `GET /media/<key>`: private media download.
+- `GET /media/<key>`: private media download; byte-range requests are supported for media clients.
 - `DELETE /media/<key>`: delete a stored object.
 - `GET /health`: reports whether D1 and R2 bindings are present.
 
-The 90 MB limit is deliberate for this first upload path. Very large individual videos need a separate S3-compatible multipart upload flow; do not send large files as base64 or put them inside D1 JSON.
+The 90 MB limit applies to the single-request Worker upload route. The current Property Desk listing editor uploads one compressed photo per listing; the Worker also accepts supported video and PDF MIME types for future UI use. Very large individual videos need a separate multipart upload flow; do not send large files as base64 or put them inside D1 JSON.
 
 ### Data safety
 
-Before migrating existing listings, export a Property Desk JSON backup. Existing `photo` data URLs must be uploaded to R2 and replaced by media-key metadata before cloud state sync. Do not delete the local originals until the migration has been verified on another device.
+On the first Upload this device operation, the app downloads a JSON backup, uploads every existing listing `photo` data URL to R2, changes each listing to a `photoKey`, then uploads the compact state to D1. If a photo upload fails, the cloud state upload stops; retry after fixing the issue. Verify photos on another device before deleting any manual backups. A photo uploaded to R2 but not yet referenced by D1 may remain as an unused object; it is safer to retain it than to delete it automatically.
 
 ### Free-tier warning
 
