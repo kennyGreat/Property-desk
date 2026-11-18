@@ -567,6 +567,49 @@ async function saveL(){
  }catch(e){setSt('Property save failed');alert(e.message+'\n\nYour existing property record has not been changed.')}
 }
 
+
+// ===== Imported records and publishing use the complete property dataset =====
+function mSave(){
+ let sk=0,review=0,reqs=0,lsts=0;const remaining=[],now=Date.now();
+ mDraft.filter(d=>d.ok).forEach(d=>{
+  const kind=mMode==='req'?'request':mMode==='lst'?'listing':d.classification;
+  if(kind==='review'){review++;remaining.push(d);return}
+  if(kind==='request'){
+   const raw=String(d.raw||'').trim(),dup=S.reqs.some(r=>r.src===d.src&&String(r.phone||'')===String(d.phone||'')&&String(r.postedAt||'')===String(d.postedAt||'')&&String(r.raw||'').trim()===raw);if(dup)return;
+   S.reqs.unshift({id:uid(),name:d.name||'',phone:d.phone||'',tx:d.tx||'Sale',loc:d.loc||'',country:d.country||'Nigeria',currency:d.currency||'NGN',kind:d.kind||'',beds:+d.beds||0,baths:+d.baths||0,propertySize:+d.propertySize||0,parking:+d.parking||0,furnishing:d.furnishing||'',features:d.features||'',titleDoc:d.titleDoc||'',budget:+d.budget||0,url:d.postUrl||d.url||'',postUrl:d.postUrl||d.url||'',profileUrl:d.profileUrl||'',poster:d.poster||d.name||'',group:d.group||'',postedAt:d.postedAt||'',importedAt:d.importedAt||now,src:d.src||'Other',raw,at:now});reqs++;
+  }else if(!d.price||!d.title){sk++;remaining.push(d)}
+  else{
+   const id=uid();S.listings.unshift({id,photo:'',photoKey:'',media:[],title:d.title,type:d.tx||'Sale',kind:d.kind||'',loc:d.loc||'',country:d.country||'Nigeria',currency:d.currency||'NGN',price:+d.price,per:d.per||'year',beds:+d.beds||0,baths:+d.baths||0,toilets:+d.toilets||0,parking:+d.parking||0,propertySize:+d.propertySize||0,landSize:+d.landSize||0,furnishing:d.furnishing||'',condition:d.condition||'',titleDoc:d.titleDoc||'',features:d.features||'',status:'Available',desc:raw,originalPrompt:raw,src:d.src||'Other',source:d.src||'Other',group:d.group||'',poster:d.poster||'',phone:d.phone||'',profileUrl:d.profileUrl||'',postUrl:d.postUrl||'',postedAt:d.postedAt||'',importedAt:d.importedAt||now,raw,createdAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString(),publishStatus:'Draft'});lsts++;
+  }
+ });
+ const unchecked=mDraft.filter(d=>!d.ok);mDraft=remaining.concat(unchecked);markInb(mDraft.filter(d=>d.ok&&d.inboxId).map(d=>d.inboxId));save();
+ if(mDraft.length)render();else{mDraft=null;mMode='';render()}
+ const notes=[];if(reqs)notes.push(reqs+' request(s) saved');if(lsts)notes.push(lsts+' listing(s) saved');if(review)notes.push(review+' item(s) need classification');if(sk)notes.push(sk+' listing(s) need a title and price');if(notes.length)alert(notes.join('. ')+'.');
+}
+function fbVar(l,i){
+ const full=txt(l),area=l.loc||'your area';
+ if(i===1)return (l.type==='Rent'?'🔑 AVAILABLE TO RENT':'🏡 AVAILABLE FOR SALE')+'\n'+full;
+ if(i===2)return 'PROPERTY SEARCH / BUYER ENQUIRY\n'+(l.kind||'property')+' '+(l.type==='Rent'?'to rent':'to buy')+' around '+area+'.\n'+full;
+ return full;
+}
+function copyListingPost(id){
+ const l=S.listings.find(x=>x.id===id);if(!l)return;
+ const value=txt(l),done=()=>{l.publishStatus='Ready to publish';l.contentPreparedAt=new Date().toISOString();save();render();};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(value).then(done).catch(()=>{prompt('Copy your property marketing text:',value);l.publishStatus='Ready to publish';save();render()});
+ else{prompt('Copy your property marketing text:',value);l.publishStatus='Ready to publish';save();render()}
+}
+function markListingShared(id,channel){
+ const l=S.listings.find(x=>x.id===id);if(!l)return;
+ l.publishStatus='Shared manually';l.publishedAt=new Date().toISOString();l.publishChannels=Array.isArray(l.publishChannels)?l.publishChannels:[];if(!l.publishChannels.includes(channel))l.publishChannels.push(channel);save();render();
+}
+function vKit(){
+ const l=S.listings.find(x=>x.id===kitId);if(!l){kitId=null;return render()}
+ const body=txt(l),waLink='https://wa.me/?text='+encodeURIComponent(body),fbSearch='https://www.facebook.com/search/groups/?q='+encodeURIComponent('real estate '+(l.loc||''));
+ const status=l.publishStatus||'Draft';
+ $('v').innerHTML='<button onclick="kitId=null;render()">← Back to properties</button><div class="c" style="margin-top:12px"><div class="sectionhead" style="margin-top:0"><div><h1>Marketing & distribution</h1><div class="mu">Every field saved on this property is reflected in the marketing copy below.</div></div><span class="pill">'+esc(status.toUpperCase())+'</span></div><h2>'+esc(l.title)+'</h2><div class="mu">'+price(l)+' · '+esc(l.loc||'Location missing')+'</div><label style="margin-top:16px">Complete property marketing text</label><textarea id="kt" rows="13">'+esc(body)+'</textarea><div class="r"><button class="p" onclick="copyListingPost(\''+l.id+'\')">Copy complete post</button><a class="btn" target="_blank" rel="noopener" href="'+waLink+'" onclick="markListingShared(\''+l.id+'\',\'WhatsApp\')">Share on WhatsApp</a><a class="btn" target="_blank" rel="noopener" href="'+fbSearch+'">Find Facebook groups</a><button onclick="markListingShared(\''+l.id+'\',\'Facebook / other platform\')">Mark shared manually</button></div><p class="mu">External platforms are not automatically posting this listing. Copy or share the prepared content, publish it on the platform, then record that you shared it. Publishing status is a work log, not proof that an external site accepted the post.</p><h2>Offline materials</h2><div class="r"><button onclick="printFlyer(\''+l.id+'\')">Print flyer</button><button onclick="printSign(\''+l.id+'\')">Print signboard</button></div>'+kitMatches(l)+'<h2>Enquiry QR code</h2><p class="mu">Scan to start a WhatsApp enquiry about this property.</p><div id="qr" style="background:#fff;display:inline-block;padding:8px"></div></div>';
+ try{new QRCode($('qr'),{text:'https://wa.me/'+wa(S.set.phone)+'?text='+encodeURIComponent('Hi, I am interested in: '+l.title),width:160,height:160})}catch(e){$('qr').textContent='QR code could not load.'}
+}
+
 /* ===== App startup ===== */
 (function startPropertyDesk(){
   const boot = () => {
