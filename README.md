@@ -14,7 +14,7 @@ A lightweight, installable, mobile-first property operations app built with plai
 - Currency-aware matching: budgets are not compared when the request and listing use different currencies.
 - Imported requests show an **Available as at** timestamp.
 - Lead tracking, follow-up dates, commission estimates, WhatsApp messages, Facebook search/post preparation, printable flyers/signboards, QR enquiry links, daily action plan and JSON backup/restore.
-- Private Cloudflare R2 property-photo storage when connected to the cloud API; legacy Base64 photos are migrated to R2 during the first cloud upload.
+- Private Cloudflare R2 media storage for multiple property photos, walkthrough videos and PDF documents when connected to the cloud API; legacy Base64 photos are migrated to R2 during the first cloud upload.
 - Cloudflare D1 state sync with owner-key protection, explicit pull/upload and revision conflict checks.
 - PWA install support and offline shell caching.
 
