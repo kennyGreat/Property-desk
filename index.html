@@ -104,11 +104,11 @@ function listingPhotoHTML(l){if(l.photo&&/^data:image\//i.test(l.photo))return `
 function hydrateMediaImages(root=document){root.querySelectorAll('[data-media-key]').forEach(async img=>{const key=img.getAttribute('data-media-key');if(!key||img.dataset.loading==='1')return;img.dataset.loading='1';try{img.src=await mediaObjectUrl(key)}catch(e){img.alt='Photo unavailable — reconnect to cloud';img.title=e.message}})}
 async function migrateListingMediaToR2(){let moved=0;for(const l of S.listings){if(l.photo&&/^data:image\//i.test(l.photo)&&!l.photoKey){setSt('Moving property photos to R2…');const blob=dataUrlBlob(l.photo);const result=await cloudMediaUpload(blob,l.id||'unassigned','property-photo.jpg');l.photoKey=result.key;l.photo='';moved++;cache()}}return moved}
 async function saveL(){
- const prior=edit?S.listings.find(l=>l.id==edit):null;const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value,loc:$('lo').value,country:$('co').value.trim()||'Nigeria',currency:$('cu').value||'NGN',price:+$('pr').value,per:$('pe').value,beds:$('bd').value,baths:$('ba').value,status:$('sx').value,desc:$('de').value,originalPrompt:(($('listingPrompt')&&$('listingPrompt').value.trim())||(prior&&prior.originalPrompt)||'')};
+ const prior=edit?S.listings.find(l=>l.id==edit):null;const id=prior?prior.id:uid();const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value,loc:$('lo').value,country:$('co').value.trim()||'Nigeria',currency:$('cu').value||'NGN',price:+$('pr').value,per:$('pe').value,beds:$('bd').value,baths:$('ba').value,status:$('sx').value,desc:$('de').value,originalPrompt:(($('listingPrompt')&&$('listingPrompt').value.trim())||(prior&&prior.originalPrompt)||'')};
  if(!o.title||!o.price){alert('Add a title and a price.');return}
- try{let uploadedKey='';if(photo&&ownerKey()){setSt('Uploading property photo…');const result=await cloudMediaUpload(dataUrlBlob(photo),prior?prior.id:uid(),'property-photo.jpg');uploadedKey=result.key}
+ try{let uploadedKey='';if(photo&&ownerKey()){setSt('Uploading property photo…');const result=await cloudMediaUpload(dataUrlBlob(photo),id,'property-photo.jpg');uploadedKey=result.key}
   if(edit){const l=S.listings.find(l=>l.id==edit);Object.assign(l,o);if(uploadedKey){l.photoKey=uploadedKey;l.photo=''}else if(photo)l.photo=photo}
-  else{const id=uid();S.listings.unshift(Object.assign({id,photo:uploadedKey?'':photo,photoKey:uploadedKey},o))}
+  else S.listings.unshift(Object.assign({id,photo:uploadedKey?'':photo,photoKey:uploadedKey},o));
   edit=null;photo='';save();render();setSt(uploadedKey?'Property saved · photo stored in R2':'Property saved on this device');
  }catch(e){setSt('Property photo upload failed');alert(e.message+'\n\nThe listing has not been saved. Your existing records are unchanged.')}}
 function delL(id){if(confirm('Delete this listing?')){S.listings=S.listings.filter(l=>l.id!=id);save();render()}}
