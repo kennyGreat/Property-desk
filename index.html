@@ -485,6 +485,88 @@ function txt(l){
  return ('🏠 FOR '+String(l.type||'PROPERTY').toUpperCase()+'\n'+l.title+'\n📍 '+[l.address,l.loc,l.country].filter(Boolean).join(', ')+'\n💰 '+price(l)+'\n'+[l.beds&&l.beds+' bedrooms',l.baths&&l.baths+' bathrooms',l.toilets&&l.toilets+' toilets',l.parking&&l.parking+' parking spaces',l.propertySize&&'Building '+l.propertySize+' sqm',l.landSize&&'Land '+l.landSize+' sqm',l.furnishing,l.condition].filter(Boolean).join(' · ')+'\n'+(l.titleDoc?'📄 Title: '+l.titleDoc+'\n':'')+features+'\n\n'+s.biz+(s.phone?'\nCall / WhatsApp: '+s.phone:'')+'\nViewing by appointment. Message to request details and inspection.').replace(/\n{3,}/g,'\n\n').trim();
 }
 
+
+// ===== Redesigned overview and complete property editor =====
+function vHome(){
+ const available=S.listings.filter(l=>l.status==='Available'),matches=allM(),due=S.leads.filter(x=>x.fu&&x.fu<=new Date().toISOString().slice(0,10)&&!['Closed – won','Lost'].includes(x.stage)),incomplete=S.listings.filter(l=>dataCompleteness(l)<70);
+ const out=[];
+ out.push('<div class="hero"><span class="pill" style="background:#244534;color:#d4f0df">VORTEXEDGE REAL ESTATE · PROPERTY OPERATIONS</span><h1 style="color:#fff;margin-top:13px">Your property business, at a glance.</h1><p>Manage inventory, capture demand, find matches and prepare listings for distribution from one workspace.</p><div class="r"><button class="p" onclick="edit=null;tab=\'listings\';render()">＋ Add property</button><button style="background:#1c3025;border-color:#355241;color:#fff" onclick="tab=\'match\';mMode=\'mixed\';render()">Import property messages</button><button style="background:#1c3025;border-color:#355241;color:#fff" onclick="tab=\'settings\';render()">Cloud & backup</button></div></div>');
+ out.push(stats());
+ out.push('<div class="sectionhead"><h2>Workspaces</h2><span class="mu">Choose what you want to do</span></div><div class="quickgrid">');
+ out.push('<button class="quick" onclick="tab=\'listings\';render()"><span class="pill">INVENTORY</span><strong>Manage properties</strong><span>'+S.listings.length+' total · '+available.length+' available</span></button>');
+ out.push('<button class="quick" onclick="tab=\'match\';mMode=\'mixed\';render()"><span class="pill">DEMAND</span><strong>Import client requirements</strong><span>'+S.reqs.length+' saved requests</span></button>');
+ out.push('<button class="quick" onclick="tab=\'match\';render()"><span class="pill">INTELLIGENCE</span><strong>View property matches</strong><span>'+matches.length+' current · '+matches.filter(x=>x.s>=80).length+' strong</span></button>');
+ out.push('<button class="quick" onclick="tab=\'leads\';render()"><span class="pill">RELATIONSHIPS</span><strong>Follow up with clients</strong><span>'+S.leads.length+' leads · '+due.length+' follow-ups due</span></button>');
+ out.push('<button class="quick" onclick="tab=\'fb\';render()"><span class="pill">DISTRIBUTION</span><strong>Prepare marketing</strong><span>Posts, WhatsApp, flyers and group workflow</span></button>');
+ out.push('<button class="quick" onclick="tab=\'plan\';render()"><span class="pill">OPERATIONS</span><strong>Daily action plan</strong><span>Track the next actions for your business</span></button></div>');
+ out.push('<div class="sectionhead"><h2>Data quality</h2><span class="mu">'+incomplete.length+' listing(s) need more details</span></div><div class="c"><p class="mu">More complete records improve matching, analysis and marketing material. The app highlights missing details instead of inventing values.</p>');
+ out.push(S.listings.slice(0,6).map(l=>'<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--bd)"><span style="flex:1;min-width:0"><b>'+esc(l.title)+'</b><div class="mu">'+esc(l.loc||'Location missing')+' · '+dataCompleteness(l)+'% complete</div></span><button onclick="edit=\''+l.id+'\';tab=\'listings\';render()">Complete / edit</button></div>').join('')||'<p class="mu">Add your first property to start building your inventory.</p>');
+ out.push('</div><div class="sectionhead"><h2>Recently added properties</h2><button onclick="tab=\'listings\';render()">View all</button></div>');
+ out.push(S.listings.slice(0,4).map(l=>'<div class="c listing-card"><b>'+esc(l.title)+'</b><div class="mu">'+esc(l.loc||'Location not set')+' · '+price(l)+' · '+esc(l.status||'Available')+'</div><div class="r"><button onclick="edit=\''+l.id+'\';tab=\'listings\';render()">Edit property</button><button onclick="kitId=\''+l.id+'\';tab=\'listings\';render()">Prepare marketing</button></div></div>').join(''));
+ $('v').innerHTML=out.join('');
+}
+function vL(){
+ if(kitId)return vKit();
+ const f=edit?S.listings.find(l=>l.id==edit):{},out=[];
+ const val=(k,d)=>esc(f&&f[k]!==undefined&&f[k]!==null?f[k]:(d===undefined?'':d));
+ const opts=(arr,current)=>arr.map(x=>'<option value="'+esc(x)+'" '+(current==x?'selected':'')+'>'+esc(x||'Select')+'</option>').join('');
+ out.push('<div class="sectionhead"><div><h1>Property inventory</h1><div class="mu">One complete property record powers matching, analysis and marketing.</div></div><span class="pill">'+S.listings.length+' RECORDS</span></div>');
+ out.push(stats());
+ out.push('<div class="c"><div class="sectionhead" style="margin-top:0"><div><h2>'+(edit?'Update property':'Add a property')+'</h2><div class="mu">Describe it naturally or enter structured details below.</div></div>'+(edit?'<span class="pill">EDITING RECORD</span>':'<span class="pill">NEW RECORD</span>')+'</div>');
+ out.push('<label>Property description / original source text</label><textarea id="listingPrompt" rows="3" placeholder="Example: 4-bedroom detached duplex for sale in Barnawa, Kaduna. ₦180m. 5 bathrooms, 6 toilets, 450sqm, BQ, 2-car parking, C of O, fenced compound.">'+val('originalPrompt')+'</textarea><div class="r"><button type="button" onclick="parseListingPrompt()">Extract details from description</button><span class="fieldhint">Original source text is retained for reference and re-analysis.</span></div>');
+ out.push('<h3 style="margin-top:18px">Essential details</h3><div class="g">');
+ out.push('<div><label>Listing title *</label><input id="t" value="'+val('title')+'" placeholder="4-bedroom detached duplex"></div>');
+ out.push('<div><label>Transaction *</label><select id="ty">'+opts(['Sale','Rent'],f.type||'Sale')+'</select></div>');
+ out.push('<div><label>Property type</label><input id="k" value="'+val('kind')+'" placeholder="Duplex, flat, land, shop"></div>');
+ out.push('<div><label>Availability</label><select id="sx">'+opts(['Available','Under offer','Closed'],f.status||'Available')+'</select></div>');
+ out.push('<div><label>Area / city / state</label><input id="lo" value="'+val('loc')+'" placeholder="Barnawa, Kaduna"></div>');
+ out.push('<div><label>Country</label><input id="co" value="'+val('country','Nigeria')+'" list="countryOptions"><datalist id="countryOptions">'+COUNTRIES.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist></div>');
+ out.push('<div><label>Full address / landmark</label><input id="addr" value="'+val('address')+'" placeholder="Street, estate, nearby landmark"></div>');
+ out.push('<div><label>Currency</label><select id="cu">'+CURR.map(c=>'<option value="'+c+'" '+((f.currency||S.set.currency||'NGN')==c?'selected':'')+'>'+c+'</option>').join('')+'</select></div>');
+ out.push('<div><label>Price *</label><input id="pr" type="number" min="0" value="'+val('price')+'" placeholder="Asking price"></div>');
+ out.push('<div><label>Rent period</label><select id="pe">'+opts(['year','month'],f.per||'year')+'</select></div></div>');
+ out.push('<details '+(edit?'open':'')+'><summary>Property specifications · features · legal details</summary><div class="g" style="margin-top:13px">');
+ out.push('<div><label>Bedrooms</label><input id="bd" type="number" min="0" value="'+val('beds')+'" placeholder="e.g. 4"></div>');
+ out.push('<div><label>Bathrooms</label><input id="ba" type="number" min="0" value="'+val('baths')+'" placeholder="e.g. 5"></div>');
+ out.push('<div><label>Toilets</label><input id="to" type="number" min="0" value="'+val('toilets')+'" placeholder="e.g. 6"></div>');
+ out.push('<div><label>Parking spaces</label><input id="pk" type="number" min="0" value="'+val('parking')+'" placeholder="e.g. 2"></div>');
+ out.push('<div><label>Building size (sqm)</label><input id="sz" type="number" min="0" value="'+val('propertySize')+'" placeholder="e.g. 300"></div>');
+ out.push('<div><label>Land size (sqm)</label><input id="lsz" type="number" min="0" value="'+val('landSize')+'" placeholder="e.g. 450"></div>');
+ out.push('<div><label>Furnishing</label><select id="fur">'+opts(['','Unfurnished','Semi-furnished','Fully furnished'],f.furnishing||'')+'</select></div>');
+ out.push('<div><label>Condition</label><select id="cond">'+opts(['','Newly built','Excellent','Good','Fair','Needs renovation'],f.condition||'')+'</select></div>');
+ out.push('<div><label>Title / document</label><input id="doc" value="'+val('titleDoc')+'" placeholder="C of O, R of O, Deed, Gazette"></div>');
+ out.push('<div><label>Owner / mandate reference</label><input id="owner" value="'+val('ownerRef')+'" placeholder="Owner, direct mandate, agent"></div>');
+ out.push('<div><label>Source of listing</label><select id="source">'+opts(['','Direct owner','Mandate','Agent','Referral','Facebook','WhatsApp','Other'],f.source||'')+'</select></div></div>');
+ out.push('<div style="margin-top:12px"><label>Features and amenities (separate with commas)</label><textarea id="features" rows="3" placeholder="BQ, swimming pool, fitted kitchen, generator, borehole, security, lift, garden">'+val('features')+'</textarea></div>');
+ out.push('<div style="margin-top:10px"><label>Full description / notes</label><textarea id="de" rows="4" placeholder="Condition, access road, title details, payment terms, restrictions, inspection arrangements...">'+val('desc')+'</textarea></div></details>');
+ out.push('<details><summary>Photos, walkthrough videos and documents</summary><div style="margin-top:12px"><input id="ph" type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime,video/3gpp,video/x-msvideo,application/pdf" onchange="pickMediaFiles(this)"><div class="fieldhint">Files are stored in private R2 when connected. Existing media is retained when updating a record.</div>'+(f?listingMediaHTML(f):'')+'</div></details>');
+ out.push('<div class="r"><button class="p" onclick="saveL()">'+(edit?'Save property updates':'Save property')+'</button>'+(edit?'<button onclick="cancelListingEdit()">Cancel edit</button>':'')+'</div></div>');
+ out.push('<div class="sectionhead"><h2>Saved properties</h2><span class="mu">Edit any record without losing its source description</span></div>');
+ out.push(S.listings.length?S.listings.map(l=>'<div class="c listing-card"><div class="li">'+listingPhotoHTML(l)+'<div style="flex:1;min-width:0"><b>'+esc(l.title)+'</b><div style="margin:5px 0"><span class="tag">'+esc(l.type)+'</span><span class="tag">'+esc(l.status)+'</span><span class="tag">'+dataCompleteness(l)+'% complete</span></div><div><b>'+price(l)+'</b></div><div class="mu">'+esc(l.loc||'Location missing')+(l.country?', '+esc(l.country):'')+' · '+(l.beds||'—')+' bed · '+(l.baths||'—')+' bath · '+(l.propertySize||l.landSize?((l.propertySize||l.landSize)+' sqm'):'size not stated')+'</div><div class="mu">'+S.leads.filter(x=>x.lid==l.id).length+' leads · '+matchesFor(l).length+' request matches</div>'+listingMediaHTML(l)+'</div></div><div class="r"><button class="p" onclick="kitId=\''+l.id+'\';render()">Marketing kit</button><button onclick="edit=\''+l.id+'\';mediaFiles=[];photo=\'\';render();scrollTo(0,0)">Edit / update</button><button class="d" onclick="delL(\''+l.id+'\')">Delete</button></div></div>').join(''):'<div class="c mu">No property records yet. Add the first property above.</div>');
+ $('v').innerHTML=out.join('');
+}
+function cancelListingEdit(){edit=null;photo='';mediaFiles=[];render()}
+function parseListingPrompt(){
+ const raw=$('listingPrompt').value.trim();if(raw.length<12){alert('Enter a fuller property description first.');return}
+ const d=pLst(raw),bits=extractPropertyBits(raw);
+ $('t').value=d.title;$('ty').value=d.tx;$('k').value=d.kind||'';$('lo').value=d.loc||'';$('co').value=d.country||'Nigeria';$('cu').value=d.currency||'NGN';$('pr').value=d.price||'';$('pe').value=d.per||'year';$('bd').value=bits.beds||'';$('ba').value=bits.baths||'';$('to').value=bits.toilets||'';$('pk').value=bits.parking||'';$('sz').value=bits.propertySize||'';$('fur').value=bits.furnishing||'';$('de').value=raw;
+ if(!d.price)alert('Details extracted. Enter the price manually because it was not detected.');$('t').focus();
+}
+async function saveL(){
+ const prior=edit?S.listings.find(l=>l.id==edit):null;if(edit&&!prior){alert('This property could not be found. Refresh the list and try again.');return}
+ const id=prior?prior.id:uid(),now=new Date().toISOString();
+ const o={title:$('t').value.trim(),type:$('ty').value,kind:$('k').value.trim(),loc:$('lo').value.trim(),country:$('co').value.trim()||'Nigeria',address:$('addr').value.trim(),currency:$('cu').value||'NGN',price:Number($('pr').value),per:$('pe').value,beds:Number($('bd').value)||0,baths:Number($('ba').value)||0,toilets:Number($('to').value)||0,parking:Number($('pk').value)||0,propertySize:Number($('sz').value)||0,landSize:Number($('lsz').value)||0,furnishing:$('fur').value,condition:$('cond').value,titleDoc:$('doc').value.trim(),ownerRef:$('owner').value.trim(),source:$('source').value,features:$('features').value.trim(),status:$('sx').value,desc:$('de').value.trim(),originalPrompt:$('listingPrompt').value.trim()||(prior&&prior.originalPrompt)||'',createdAt:prior&&prior.createdAt||now,updatedAt:now,publishStatus:prior&&prior.publishStatus||'Draft',publishChannels:prior&&prior.publishChannels||[]};
+ if(!o.title||!o.price||o.price<=0){alert('A property title and a valid asking price are required.');return}
+ try{
+  const added=[];if(mediaFiles.length&&!ownerKey())throw new Error('Connect to cloud in Settings before uploading multiple files, videos or PDFs.');
+  for(let i=0;i<mediaFiles.length;i++){const file=mediaFiles[i];setSt('Uploading file '+(i+1)+' of '+mediaFiles.length+' to R2…');const blob=file.type.startsWith('image/')?await compressImageFile(file):file;const result=await cloudMediaUpload(blob,id,file.name);added.push({key:result.key,name:file.name,type:blob.type||file.type,size:blob.size,uploadedAt:now})}
+  if(photo&&ownerKey()){setSt('Uploading property photo…');const blob=dataUrlBlob(photo);const result=await cloudMediaUpload(blob,id,'property-photo.jpg');added.unshift({key:result.key,name:'property-photo.jpg',type:'image/jpeg',size:blob.size,uploadedAt:now})}
+  if(prior){Object.assign(prior,o);prior.media=Array.isArray(prior.media)?prior.media:[];prior.media.push(...added);if(added.length){const first=added.find(m=>String(m.type).startsWith('image/'));if(first&&!prior.photoKey)prior.photoKey=first.key;if(first)prior.photo=''}if(photo&&!ownerKey()&&!prior.photoKey)prior.photo=photo}
+  else{const first=added.find(m=>String(m.type).startsWith('image/'));S.listings.unshift(Object.assign({id,photo:photo&&!ownerKey()?photo:'',photoKey:first?first.key:'',media:added},o))}
+  edit=null;photo='';mediaFiles=[];save();render();setSt('Property saved locally'+(ownerKey()&&cloudReadyForAutoSync?' · syncing to cloud':' · connect cloud / upload once to sync devices'));
+ }catch(e){setSt('Property save failed');alert(e.message+'\n\nYour existing property record has not been changed.')}
+}
+
 /* ===== App startup ===== */
 (function startPropertyDesk(){
   const boot = () => {
