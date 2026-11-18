@@ -675,6 +675,76 @@ function parseListingPrompt(){
  if(!d.price)alert('Details extracted. Enter the price manually because it was not detected.');$('t').focus();
 }
 
+
+/* ===== Guided client brief and response-led matching ===== */
+function saveGuidedRequest(){
+ const get=id=>$(id)?$(id).value.trim():'';
+ const tx=get('rqTx'),kind=get('rqKind'),loc=get('rqLoc'),currency=get('rqCurrency'),budget=Number(get('rqBudget'))||0,extra=get('rqExtra'),timeline=get('rqTimeline');
+ if(!tx||!kind||!loc||!budget){alert('Please provide transaction, property type, preferred location and budget.');return}
+ const now=Date.now(),r={id:uid(),name:get('rqName'),phone:get('rqPhone'),tx,kind,loc,country:get('rqCountry')||'Nigeria',currency,budget,extraDetails:extra,timeline,raw:['Client property brief', 'Transaction: '+tx,'Property type: '+kind,'Preferred location: '+loc,'Budget: '+N(budget,currency),'Other requirements: '+(extra||'Not stated'),'Move-in timeline: '+(timeline||'Not stated')].join('\n'),src:'Direct client brief',at:now,importedAt:now,createdAt:new Date(now).toISOString(),briefVersion:1};
+ S.reqs.unshift(r);save();mMode='';mDraft=null;render();
+ alert('Client brief saved. Matching has been recalculated using these answers.');
+}
+function guidedBriefHTML(){
+ return '<div class="c" id="guidedBrief"><div class="sectionhead" style="margin-top:0"><div><h2>Capture a client property requirement</h2><div class="mu">Ask the client these questions. Their answers become the matching criteria.</div></div><span class="pill">GUIDED INTAKE</span></div>'+
+ '<div class="g">'+
+ '<div><label>Client name (optional)</label><input id="rqName" placeholder="Client name"></div><div><label>Phone / WhatsApp (optional)</label><input id="rqPhone" placeholder="Phone number"></div>'+
+ '<div><label>What are you looking for?</label><select id="rqTx"><option value="Rent">To rent</option><option value="Sale">To buy</option></select></div>'+
+ '<div><label>What type of property are you looking for?</label><input id="rqKind" placeholder="e.g. 3-bedroom flat, duplex, land, shop"></div>'+
+ '<div><label>What location(s) do you want?</label><input id="rqLoc" placeholder="e.g. Barnawa, Kaduna / GRA, Zaria"></div>'+
+ '<div><label>Country</label><input id="rqCountry" value="Nigeria" placeholder="Country"></div>'+
+ '<div><label>What is your budget?</label><input id="rqBudget" type="number" min="1" placeholder="Enter maximum budget"></div>'+
+ '<div><label>Currency</label><select id="rqCurrency">'+CURR.map(c=>'<option value="'+esc(c)+'" '+(c===(S.set.currency||'NGN')?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></div>'+
+ '<div style="grid-column:1/-1"><label>Tell me other details you want in the property that you have not mentioned?</label><textarea id="rqExtra" rows="3" placeholder="Bedrooms, bathrooms, parking, furnished/unfurnished, title documents, facilities, preferred estate, accessibility, etc."></textarea></div>'+
+ '<div><label>How soon are you ready to move in / take possession?</label><select id="rqTimeline"><option value="Immediately">Immediately</option><option value="Within 2 weeks">Within 2 weeks</option><option value="Within 1 month">Within 1 month</option><option value="Within 3 months">Within 3 months</option><option value="Within 6 months">Within 6 months</option><option value="Flexible / just searching">Flexible / just searching</option></select></div></div>'+
+ '<div class="r"><button class="p" onclick="saveGuidedRequest()">Save client requirement & find matches</button><button onclick="document.getElementById(\'guidedBrief\').querySelectorAll(\'input,textarea\').forEach(x=>x.value=\'\')">Clear answers</button></div></div>';
+}
+function sc(l,r){
+ if(!l||!r||l.type!==r.tx||l.status!=='Available')return null;
+ if(l.country&&r.country&&String(l.country).toLowerCase()!==String(r.country).toLowerCase())return null;
+ let earned=0,total=0;const why=[];
+ const add=(w,s,label)=>{s=Math.max(0,Math.min(1,s));earned+=w*s;total+=w;why.push((s>=.85?'✓ ':s>=.5?'~ ':'✗ ')+label)};
+ const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+ const location=norm((l.loc||'')+' '+(l.address||'')),wanted=norm(r.loc);
+ if(wanted){const parts=wanted.split(/[ ,/]+/).filter(x=>x.length>2);const hits=parts.filter(x=>location.includes(x));add(25,hits.length?Math.min(1,hits.length/Math.min(2,parts.length)):0,hits.length?'Preferred location matches: '+hits.join(', '):'Preferred location not confirmed');}
+ const lk=norm((l.kind||'')+' '+(l.title||'')),rk=norm(r.kind);
+ if(rk){const a=kindOf(lk),b=kindOf(rk),same=lk.includes(rk)||rk.includes(lk)||(a&&b&&a===b);add(20,same?1:0,same?'Property type matches':'Property type differs');}
+ if(+r.budget>0&&+l.price>0){
+  if((r.currency||'NGN')===(l.currency||'NGN')){const asking=l.type==='Rent'&&l.per==='month'?+l.price*12:+l.price,ratio=asking/+r.budget;add(25,ratio<=1?1:ratio<=1.05?.8:ratio<=1.1?.55:ratio<=1.2?.25:0,ratio<=1?'Within budget':Math.round((ratio-1)*100)+'% above budget');}
+  else why.push('Currency differs; budget was not scored');
+ }
+ const raw=String(r.extraDetails||r.raw||'');
+ const bits=extractPropertyBits(raw);
+ if(+bits.beds>0&&+l.beds>0)add(4,+l.beds>=+bits.beds?1:0,'Bedrooms: '+l.beds+' available / '+bits.beds+' requested');
+ if(+bits.baths>0&&+l.baths>0)add(3,+l.baths>=+bits.baths?1:0,'Bathrooms compared');
+ if(+bits.toilets>0&&+l.toilets>0)add(2,+l.toilets>=+bits.toilets?1:0,'Toilets compared');
+ if(+bits.parking>0&&+l.parking>0)add(2,+l.parking>=+bits.parking?1:0,'Parking compared');
+ if(bits.furnishing&&l.furnishing)add(3,norm(bits.furnishing)===norm(l.furnishing)?1:0,'Furnishing compared');
+ if(bits.titleDoc&&l.titleDoc)add(3,norm(l.titleDoc).includes(norm(bits.titleDoc))?1:0,'Title document compared');
+ const requestedFeatures=norm((bits.features||'')+' '+raw),availableFeatures=norm((l.features||'')+' '+(l.desc||''));
+ const stop=new Set(['looking','property','need','want','rent','sale','buy','for','with','around','near','please','client','budget','house','apartment','from','that','this','have','has','the','and','you','any','area','must','should','within','move','soon','ready','immediately']);
+ const tokens=[...new Set(requestedFeatures.split(' ').filter(x=>x.length>3&&!stop.has(x)))];
+ if(tokens.length){const hits=tokens.filter(x=>availableFeatures.includes(x));add(10,hits.length/Math.min(tokens.length,5),hits.length?'Extra requirements met: '+hits.slice(0,5).join(', '):'Extra requirements not confirmed');}
+ const timeline=String(r.timeline||'').toLowerCase();
+ if(timeline&&timeline!=='flexible / just searching'){
+  const availability=String(l.availability||l.availableFrom||l.availableDate||'').toLowerCase();
+  if(/immediately|now|ready now|vacant/.test(availability))add(10,1,'Available immediately');
+  else if(availability)add(10,/immediate|vacant|ready/.test(availability)?1:0,'Availability timing: '+availability);
+  else if(l.status==='Available')add(10,.65,'Listing marked available; exact move-in date needs confirmation');
+ }
+ if(!total)return null;
+ const coverage=Math.min(1,total/65);
+ return {s:Math.round(earned/total*100*coverage),why,coverage:Math.round(coverage*100)};
+}
+function vM(){
+ const ms=allM();
+ $('v').innerHTML=guidedBriefHTML()+
+ '<div class="c"><h2 style="margin-top:0">Import existing property messages</h2><p class="mu">You can still import WhatsApp and Facebook messages in bulk. The guided brief above is best when you are speaking directly with a client.</p><div class="r"><button onclick="mMode=\'mixed\';mDraft=null;render()">Import mixed messages</button><button onclick="mMode=\'req\';mDraft=null;render()">Import requests only</button><button onclick="mMode=\'lst\';mDraft=null;render()">Import listings only</button><select style="width:auto" onchange="mMin=+this.value;render()">'+[40,60,80].map(v=>'<option value="'+v+'" '+(v==mMin?'selected':'')+'>Show '+v+'%+</option>').join('')+'</select></div>'+(mMode?impUI():'')+'</div>'+
+ '<div class="st"><div><b>'+S.reqs.length+'</b><span>Requests</span></div><div><b>'+S.listings.filter(l=>l.status==='Available').length+'</b><span>Available listings</span></div><div><b>'+ms.length+'</b><span>Matches</span></div><div><b>'+ms.filter(m=>m.s>=80).length+'</b><span>Strong (80%+)</span></div></div>'+
+ (ms.length?ms.map(mCard).join(''):'<p class="mu">No matches yet. Save a client brief and ensure your inventory has available properties. Results rank by location (25%), property type (20%), budget (25%), extra requirements (10%), move-in timing (10%) and additional specifications where supplied. Missing property information is not treated as a confirmed match.</p>')+
+ (S.reqs.length?'<h2>Saved client requirements</h2>'+S.reqs.map(mReq).join(''):'');
+}
+
 /* ===== App startup ===== */
 (function startPropertyDesk(){
   const boot = () => {
