@@ -8,7 +8,7 @@ This backend stores the complete existing Property Desk state as one JSON docume
 - `wrangler.toml`: Worker and D1 binding configuration.
 
 ## Important
-The frontend is now connected to this API. It remains local-first and sync is explicit: connect with OWNER_KEY, then use Pull cloud or Upload this device in Settings. A pull replaces that device's current state after downloading a backup. Before the first migration, export a separate backup from the device holding your current records.
+The frontend is connected to this API and remains local-first. Connect with OWNER_KEY and perform the initial explicit Pull cloud or Upload this device action in Settings. After a successful pull/upload, ordinary app edits are automatically written to D1 while the connected session is active. On a new browser/device, connect and pull cloud before editing. A pull replaces that device's current state after downloading a backup. Before the first migration, export a separate backup from the device holding your current records.
 
 ## Cloudflare setup
 1. In the Cloudflare D1 database `vortexedge-property-desk`, open Console and execute the contents of `schema.sql`.
@@ -27,11 +27,11 @@ The frontend is now connected to this API. It remains local-first and sync is ex
 ## Security and sync behavior
 The owner key is a shared secret, not individual user accounts. Anyone who obtains it can access the entire business dataset. Rotate it if exposed. CORS is open because the static GitHub Pages app may be served from a changing origin; authorization is enforced by the secret. For a public commercial product, replace this shared-key design with proper per-user authentication and access controls.
 
-The API uses a single canonical state row and revision checks to prevent silent last-write-wins overwrites. The frontend provides explicit pull/upload, local backup before pull/upload, visible status and revision checks. It does not automatically merge simultaneous edits or sync in the background; avoid editing the same dataset on two devices at the same time.
+The API uses a single canonical state row and revision checks to prevent silent last-write-wins overwrites. The frontend provides explicit initial pull/upload, local backup before a pull/upload, visible status and revision checks. Once a device has established the current cloud revision, ordinary saves are queued and automatically uploaded to D1. If another device changes the data first, the revision conflict pauses automatic sync and requires the user to pull the latest cloud state; there is no automatic merge of simultaneous edits. Avoid editing the same dataset on two devices at the same time.
 
 ## R2 media storage
 
-The app's property photos are stored separately from the D1 app-state JSON in the private R2 bucket `vortexedge-property-media`. New photos upload directly to R2 when the owner key is connected. Legacy Base64 listing photos are migrated to R2 during the next explicit cloud upload; each listing then stores `photoKey` instead of the image bytes.
+The app's property photos, walkthrough videos and PDF documents are stored separately from the D1 app-state JSON in the private R2 bucket `vortexedge-property-media`. New media uploads directly to R2 when the owner key is connected. Legacy Base64 listing photos are migrated to R2 during the first explicit cloud upload; each listing then stores `photoKey` instead of the image bytes.
 
 ### Worker binding
 
