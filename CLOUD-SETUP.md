@@ -51,7 +51,7 @@ All media endpoints require the existing `Authorization: Bearer OWNER_KEY` heade
 - `DELETE /media/<key>`: delete a stored object.
 - `GET /health`: reports whether D1 and R2 bindings are present.
 
-The 90 MB limit applies to the single-request Worker upload route. The current Property Desk listing editor uploads one compressed photo per listing; the Worker also accepts supported video and PDF MIME types for future UI use. Very large individual videos need a separate multipart upload flow; do not send large files as base64 or put them inside D1 JSON.
+The 90 MB limit applies to the single-request Worker upload route. The Property Desk listing editor supports multiple photos, videos and PDF documents. Images are compressed in the browser before upload; videos and PDFs are uploaded as files. Each individual upload is limited to 90 MB by the current Worker route. Very large individual videos need a separate multipart upload flow; do not send large files as base64 or put them inside D1 JSON.
 
 ### Data safety
 
