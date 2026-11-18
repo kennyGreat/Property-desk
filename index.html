@@ -713,7 +713,7 @@ function sc(l,r){
   if((r.currency||'NGN')===(l.currency||'NGN')){const asking=l.type==='Rent'&&l.per==='month'?+l.price*12:+l.price,ratio=asking/+r.budget;add(25,ratio<=1?1:ratio<=1.05?.8:ratio<=1.1?.55:ratio<=1.2?.25:0,ratio<=1?'Within budget':Math.round((ratio-1)*100)+'% above budget');}
   else why.push('Currency differs; budget was not scored');
  }
- const raw=String(r.extraDetails||r.raw||'');
+ const raw=String(r.extraDetails||(r.src==='Direct client brief'?'':r.raw||''));
  const bits=extractPropertyBits(raw);
  if(+bits.beds>0&&+l.beds>0)add(4,+l.beds>=+bits.beds?1:0,'Bedrooms: '+l.beds+' available / '+bits.beds+' requested');
  if(+bits.baths>0&&+l.baths>0)add(3,+l.baths>=+bits.baths?1:0,'Bathrooms compared');
@@ -757,7 +757,7 @@ function mCard(m){
 function transactionType(value,fallback){
  const t=String(value||'').toLowerCase().replace(/[_-]+/g,' ').replace(/\\s+/g,' ').trim();
  const rent=/\\b(for rent|to rent|to let|for letting|rent(?:al)?|lease|tenant|let out|letting)\\b/.test(t);
- const sale=/\\b(for sale|to buy|for buying|buy|purchase|selling|sell|buyer)\\b/.test(t);
+ const sale=/\\b(for sale|sale|to buy|for buying|buy|purchase|selling|sell|buyer)\\b/.test(t);
  if(rent&&!sale)return 'Rent';
  if(sale&&!rent)return 'Sale';
  if(rent&&sale)return /\\b(for rent|to rent|to let|letting)\\b/.test(t)?'Rent':'Sale';
