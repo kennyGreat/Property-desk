@@ -57,6 +57,10 @@ The 90 MB limit applies to the single-request Worker upload route. The Property 
 
 On the first Upload this device operation, the app downloads a JSON backup, uploads every existing listing `photo` data URL to R2, changes each listing to a `photoKey`, then uploads the compact state to D1. If a photo upload fails, the cloud state upload stops; retry after fixing the issue. Verify photos on another device before deleting any manual backups. A photo uploaded to R2 but not yet referenced by D1 may remain as an unused object; it is safer to retain it than to delete it automatically.
 
+### Backups and media retention
+
+The JSON backup contains listing records and R2 object keys; it does not package the actual photo, video or PDF bytes. Those files remain in the private R2 bucket. Keep the R2 bucket and Worker owner key active, and do not delete media objects or the bucket when moving or restoring a JSON backup. The app intentionally avoids deleting old R2 objects automatically so a listing edit or backup restore cannot accidentally destroy media still referenced by another saved copy.
+
 ### Free-tier warning
 
 R2 Standard currently includes 10 GB-month storage, 1 million Class A operations and 10 million Class B operations per month, with additional usage billed. Monitor R2 Metrics and account billing.
