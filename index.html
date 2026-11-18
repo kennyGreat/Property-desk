@@ -631,7 +631,7 @@ function conditionOf(t){
  if(/fair condition/.test(z))return 'Fair';
  return '';
 }
-function extractPropertyBits(t){const sqm=sqmOf(t),lm=String(t||'').match(/(?:land|plot)[^\\n.]{0,35}?([\\d,.]+)\\s*(?:sqm|sq\\.?\\s*m|square\\s*met(?:er|re)s?)/i);return {beds:bedsOf(t),baths:bathsOf(t),toilets:toiletsOf(t),parking:parkingOf(t),propertySize:lm?0:sqm,landSize:lm?+lm[1].replace(/,/g,''):0,furnishing:furnishOf(t),features:featuresOf(t),titleDoc:docOf(t),condition:conditionOf(t)}}
+function extractPropertyBits(t){const sqm=sqmOf(t),lm=String(t||'').match(/(?:land|plot)[^\r\n.]{0,35}?([\\d,.]+)\\s*(?:sqm|sq\\.?\\s*m|square\\s*met(?:er|re)s?)/i);return {beds:bedsOf(t),baths:bathsOf(t),toilets:toiletsOf(t),parking:parkingOf(t),propertySize:lm?0:sqm,landSize:lm?+lm[1].replace(/,/g,''):0,furnishing:furnishOf(t),features:featuresOf(t),titleDoc:docOf(t),condition:conditionOf(t)}}
 function pLst(b){
  const t=String(b||'').toLowerCase(),rent=/\b(for rent|to let|to rent|rental|per annum|per year|yearly|per month|monthly)\b/.test(t),bits=extractPropertyBits(b),k=kindOf(t),tx=rent?'Rent':'Sale';
  return {title:(bits.beds?bits.beds+'-bedroom ':'')+(k||'property')+(rent?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:k,beds:bits.beds,baths:bits.baths,toilets:bits.toilets,parking:bits.parking,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year',propertySize:bits.propertySize,landSize:bits.landSize,features:bits.features,titleDoc:bits.titleDoc,condition:bits.condition,furnishing:bits.furnishing};
