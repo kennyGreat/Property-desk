@@ -398,7 +398,7 @@ async function cloudUpload(){
 async function syncNow(){cache();await cloudUpload()}
 function acctCard(){return '<div class="c"><h2 style="margin-top:0">Cloud storage and device access</h2><p class="mu">Your records are still saved locally until you explicitly upload them. Enter the private owner key to connect. The key is kept in this browser session only and is not written into the app or GitHub.</p><p class="mu"><b>API:</b> '+CLOUD_API+'</p><label>Private OWNER_KEY</label><input id="ownerKeyInput" type="password" autocomplete="off" placeholder="Paste your private key here"><div class="r"><button class="p" onclick="cloudConnect()">Connect to cloud</button><button onclick="cloudPull()">Pull cloud to this device</button><button onclick="cloudUpload()">Upload this device to cloud</button></div><p class="mu">Current status: '+esc(st)+' · Local records: '+S.listings.length+' listings, '+S.reqs.length+' requests, '+S.leads.length+' leads'+(cloudUpdatedAt?' · Cloud updated '+fmtDate(cloudUpdatedAt):'')+'</p><div class="r"><button onclick="exp()">Export full backup</button><button onclick="$(\'imf\').click()">Import backup</button></div></div>'}
 function capCard(){return '<div class="c"><h2 style="margin-top:0">Message capture</h2><p class="mu">Automatic phone-notification capture is not active. You can still paste or upload messages in Match → Import requests.</p></div>'}
-function qsync(){}
+function qsync(){setSt('Saved locally · upload to sync')}
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 addEventListener('online',()=>setSt('Online · local storage active'));
 /* ===== Inbox placeholder in local-first edition ===== */
