@@ -392,7 +392,7 @@ async function cloudPull(){
   if(!d.state){alert('The cloud database is empty. Nothing was changed. Use Upload local to migrate this device.');cloudRevision=d.revision||0;cloudHasState=false;setSt('Cloud is empty');return}
   backupLocalDownload();S=Object.assign({listings:[],leads:[],set:{biz:'Vortexedge Real Estate',phone:'',sale:5,rent:10},chk:{},groups:[],reqs:[]},d.state);
   if(!Array.isArray(S.listings))S.listings=[];if(!Array.isArray(S.leads))S.leads=[];if(!Array.isArray(S.reqs))S.reqs=[];if(!Array.isArray(S.groups))S.groups=[];
-  cache();cloudRevision=d.revision;cloudHasState=true;cloudUpdatedAt=d.updatedAt;setSt('Cloud data loaded · revision '+cloudRevision);render();
+  cache();cloudRevision=d.revision;cloudHasState=true;cloudUpdatedAt=d.updatedAt;cloudReadyForAutoSync=true;setSt('Cloud data loaded · revision '+cloudRevision);render();
   alert('Cloud data loaded. A backup of the previous local data was downloaded first.');
  }catch(e){setSt('Cloud pull failed');alert(e.message)}
 }
@@ -406,7 +406,7 @@ async function cloudUpload(){
   const migrated=await migrateListingMediaToR2();
   cache();setSt('Uploading app records to D1…');
   const result=await cloudRequest('/state','PUT',{expectedRevision:latest.revision||0,state:S});
-  cloudRevision=result.revision;cloudHasState=true;cloudUpdatedAt=result.updatedAt;setSt('Cloud saved · revision '+cloudRevision);
+  cloudRevision=result.revision;cloudHasState=true;cloudUpdatedAt=result.updatedAt;cloudReadyForAutoSync=true;setSt('Cloud saved · revision '+cloudRevision);
   alert('Upload successful. Your property records are in D1 and '+(migrated?' '+migrated+' photo(s) were moved to private R2 storage.':'existing R2 photo references were retained.')+' Connect your other device with the same OWNER_KEY and use Pull cloud.');
  }catch(e){setSt(e.status===409?'Cloud conflict · pull latest data':'Cloud upload failed');alert(e.status===409?'A newer cloud revision exists. Nothing was overwritten. Pull the latest cloud data before trying again.':e.message)}
 }
@@ -426,6 +426,64 @@ async function inbSet(){}
 const markInb=()=>{};
 function inbAdd(){alert('Paste the message in Match → Import requests')}
 
+
+
+// ===== Data completeness, expanded matching and reliable cloud updates =====
+let syncTimer=null,syncInFlight=false,syncAgain=false,cloudReadyForAutoSync=false;
+function bathsOf(t){const m=String(t||'').match(/\b(\d+)\s*(?:bath(?:room)?s?|baths?)\b/i);return m?+m[1]:0}
+function toiletsOf(t){const m=String(t||'').match(/\b(\d+)\s*(?:toilets?|wc)\b/i);return m?+m[1]:0}
+function parkingOf(t){const m=String(t||'').match(/\b(\d+)\s*(?:car\s*)?(?:parking|garage|car park)\b/i);return m?+m[1]:0}
+function sqmOf(t){const m=String(t||'').match(/([\d,.]+)\s*(?:sqm|sq\.?\s*m|square\s*met(?:er|re)s?)/i);return m?+m[1].replace(/,/g,''):0}
+function furnishOf(t){const z=String(t||'').toLowerCase();return /fully furnished/.test(z)?'Fully furnished':/semi[- ]furnished/.test(z)?'Semi-furnished':/unfurnished/.test(z)?'Unfurnished':''}
+function extractPropertyBits(t){return {beds:bedsOf(t),baths:bathsOf(t),toilets:toiletsOf(t),parking:parkingOf(t),propertySize:sqmOf(t),furnishing:furnishOf(t)}}
+function dataCompleteness(l){const fields=['title','type','kind','loc','country','price','beds','baths','desc'];return Math.round(fields.filter(k=>String(l[k]??'').trim()!=='').length/fields.length*100)}
+function qsync(){
+ if(!ownerKey()){setSt('Saved on this device · connect cloud to sync');return}
+ if(!cloudReadyForAutoSync){setSt(cloudHasState?'Saved locally · pull cloud before syncing':'Saved locally · upload once to start cloud sync');return}
+ dirty=true;clearTimeout(syncTimer);syncTimer=setTimeout(autoCloudSync,900);setSt('Saved locally · cloud sync queued');
+}
+async function autoCloudSync(){
+ if(!cloudReadyForAutoSync||!ownerKey()||!dirty)return;
+ if(syncInFlight){syncAgain=true;return}
+ syncInFlight=true;dirty=false;setSt('Saving changes to cloud…');
+ try{const result=await cloudRequest('/state','PUT',{expectedRevision:cloudRevision||0,state:S});cloudRevision=result.revision;cloudHasState=true;cloudUpdatedAt=result.updatedAt;setSt('All changes saved · cloud revision '+cloudRevision)}
+ catch(e){dirty=true;setSt(e.status===409?'Cloud conflict · pull latest before continuing':'Cloud sync failed · local changes retained');if(e.status!==409)console.warn('Property Desk cloud sync failed',e)}
+ finally{syncInFlight=false;if(syncAgain||dirty){syncAgain=false;if(cloudReadyForAutoSync&&ownerKey())syncTimer=setTimeout(autoCloudSync,1200)}}
+}
+function sc(l,r){
+ if(!l||!r||l.type!==r.tx||l.status!=='Available')return null;
+ if(l.country&&r.country&&l.country.toLowerCase()!==r.country.toLowerCase())return null;
+ const why=[];let earned=0,total=0;
+ const add=(weight,score,label)=>{total+=weight;earned+=weight*score;why.push((score>=.75?'✓ ':score>0?'~ ':'✗ ')+label)};
+ const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+ const locA=norm(l.loc+' '+l.address),locB=norm(r.loc);
+ if(locB){const parts=locB.split(/[ ,]+/).filter(x=>x.length>2);const hit=parts.filter(x=>locA.includes(x)).length;add(28,hit?Math.min(1,hit/Math.min(2,parts.length)):0,hit?'Location overlap':'Area differs')}
+ const lk=norm((l.kind||'')+' '+(l.title||'')),rk=norm(r.kind);
+ if(rk&&lk){const same=lk.includes(rk)||rk.includes(lk)||(kindOf(lk)&&kindOf(lk)===kindOf(rk));add(15,same?1:0,same?'Property type fits':'Property type differs')}
+ if(+r.beds>0&&+l.beds>0)add(9,+l.beds>=+r.beds?1:0,+l.beds+' bedrooms vs '+r.beds+' required');
+ if(+r.baths>0&&+l.baths>0)add(5,+l.baths>=+r.baths?1:0,+l.baths+' bathrooms vs '+r.baths+' required');
+ if(+r.budget>0&&+l.price>0){const priceYear=l.type==='Rent'&&l.per==='month'?l.price*12:l.price;const budgetYear=r.type==='Rent'&&r.per==='month'?r.budget*12:r.budget;if((r.currency||'NGN')===(l.currency||'NGN')){const ratio=priceYear/budgetYear;add(20,ratio<=1?1:ratio<=1.1?.75:ratio<=1.2?.35:0,ratio<=1?'Within budget':Math.round((ratio-1)*100)+'% over budget')}else why.push('Currency differs; budget not compared')}
+ if(+r.propertySize>0&&+l.propertySize>0)add(7,+l.propertySize>=+r.propertySize?1:Math.max(0,+l.propertySize/+r.propertySize),'Building size compared');
+ if(+r.parking>0&&+l.parking>0)add(4,+l.parking>=+r.parking?1:0,'Parking spaces compared');
+ if(r.furnishing&&l.furnishing)add(4,norm(r.furnishing)===norm(l.furnishing)?1:0,'Furnishing compared');
+ if(r.titleDoc&&l.titleDoc)add(4,norm(l.titleDoc).includes(norm(r.titleDoc))?1:0,'Title document compared');
+ const need=norm((r.features||'')+' '+(r.raw||'')),have=norm((l.features||'')+' '+(l.desc||''));const tokens=[...new Set(need.split(' ').filter(x=>x.length>3))].filter(x=>have.includes(x));if(tokens.length)add(4,Math.min(1,tokens.length/3),'Feature overlap: '+tokens.slice(0,4).join(', '));
+ if(!total)return null;return {s:Math.round(earned/total*100),why};
+}
+function pLst(b){
+ const t=String(b||'').toLowerCase(),rent=/\b(for rent|to let|to rent|rental|per annum|per year|yearly|per month|monthly)\b/.test(t),bits=extractPropertyBits(b),k=kindOf(t),tx=rent?'Rent':'Sale';
+ return {title:(bits.beds?bits.beds+'-bedroom ':'')+(k||'property')+(rent?' for rent':' for sale'),tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(b),kind:k,beds:bits.beds,baths:bits.baths,price:amtOf(b),per:/per month|monthly|\/month/.test(t)?'month':'year',propertySize:bits.propertySize,parking:bits.parking,furnishing:bits.furnishing};
+}
+function pReq(b){
+ const raw=String(b||''),t=raw.replace(/https?:\/\/\S+/g,' ').toLowerCase(),ph=((raw.match(PH)||[''])[0]).replace(/[\s-]/g,''),bud=amtOf(raw),rent=/\b(rent|rental|to let|lease|tenant|per annum|per year|yearly|monthly|per month)\b/.test(t),buy=/\b(buy|purchase|for sale|selling|sell|invest)\b/.test(t),tx=rent&&!buy?'Rent':buy?'Sale':(bud&&bud<8e6?'Rent':'Sale'),bits=extractPropertyBits(t);
+ const um=raw.match(/https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\S*/i);let nm=((raw.match(/^\[?[\d\/,.: APMapm-]*\]?\s*-?\s*([A-Z][A-Za-z.' -]{1,28}):\s/)||[])[1]||'').trim();if(/^(budget|location|price|phone|contact|looking|need|wanted)/i.test(nm))nm='';
+ let budget=bud;if(tx==='Rent'&&/\b(monthly|per month|a month|\/month)\b/.test(t))budget*=12;
+ return {name:nm,phone:ph,url:um?um[0]:'',tx,loc:areasIn(t),country:countryIn(t),currency:currencyIn(raw),kind:kindOf(t),beds:bits.beds,baths:bits.baths,propertySize:bits.propertySize,parking:bits.parking,furnishing:bits.furnishing,budget,raw};
+}
+function txt(l){
+ const s=S.set,features=[l.features,l.desc].filter(Boolean).join('\n');
+ return ('🏠 FOR '+String(l.type||'PROPERTY').toUpperCase()+'\n'+l.title+'\n📍 '+[l.address,l.loc,l.country].filter(Boolean).join(', ')+'\n💰 '+price(l)+'\n'+[l.beds&&l.beds+' bedrooms',l.baths&&l.baths+' bathrooms',l.toilets&&l.toilets+' toilets',l.parking&&l.parking+' parking spaces',l.propertySize&&'Building '+l.propertySize+' sqm',l.landSize&&'Land '+l.landSize+' sqm',l.furnishing,l.condition].filter(Boolean).join(' · ')+'\n'+(l.titleDoc?'📄 Title: '+l.titleDoc+'\n':'')+features+'\n\n'+s.biz+(s.phone?'\nCall / WhatsApp: '+s.phone:'')+'\nViewing by appointment. Message to request details and inspection.').replace(/\n{3,}/g,'\n\n').trim();
+}
 
 /* ===== App startup ===== */
 (function startPropertyDesk(){
