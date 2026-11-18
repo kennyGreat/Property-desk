@@ -448,7 +448,7 @@ async function autoCloudSync(){
  if(syncInFlight){syncAgain=true;return}
  syncInFlight=true;dirty=false;setSt('Saving changes to cloud…');
  try{const result=await cloudRequest('/state','PUT',{expectedRevision:cloudRevision||0,state:S});cloudRevision=result.revision;cloudHasState=true;cloudUpdatedAt=result.updatedAt;setSt('All changes saved · cloud revision '+cloudRevision)}
- catch(e){dirty=true;setSt(e.status===409?'Cloud conflict · pull latest before continuing':'Cloud sync failed · local changes retained');if(e.status!==409)console.warn('Property Desk cloud sync failed',e)}
+ catch(e){if(e.status===409){dirty=false;syncAgain=false;setSt('Cloud conflict · pull latest before continuing')}else{setSt('Cloud sync failed · local changes retained');console.warn('Property Desk cloud sync failed',e)}}
  finally{syncInFlight=false;if(syncAgain||dirty){syncAgain=false;if(cloudReadyForAutoSync&&ownerKey())syncTimer=setTimeout(autoCloudSync,1200)}}
 }
 function sc(l,r){
